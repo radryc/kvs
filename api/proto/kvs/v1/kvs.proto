@@ -1,0 +1,172 @@
+syntax = "proto3";
+
+package kvs.v1;
+
+option go_package = "github.com/rydzu/ainfra/kvs/api/proto/kvs/v1;kvsv1";
+
+import "google/protobuf/timestamp.proto";
+
+service KVStore {
+  rpc ReadFile(ReadFileRequest) returns (ReadFileResponse);
+  rpc ReadFileStream(ReadFileRequest) returns (stream ReadFileStreamResponse);
+  rpc Stat(StatRequest) returns (StatResponse);
+  rpc ListDir(ListDirRequest) returns (ListDirResponse);
+  rpc UpsertFiles(UpsertFilesRequest) returns (BatchRevision);
+  rpc DeletePaths(DeletePathsRequest) returns (BatchRevision);
+  rpc ListVersions(ListVersionsRequest) returns (ListVersionsResponse);
+  rpc GetVersion(GetVersionRequest) returns (GetVersionResponse);
+  rpc GetVersionStream(GetVersionRequest) returns (stream ReadFileStreamResponse);
+  rpc PutFileStream(stream PutFileStreamRequest) returns (PutFileStreamResponse);
+  rpc Watch(WatchRequest) returns (stream WatchResponse);
+}
+
+message ReadFileRequest {
+  string logical_path = 1;
+}
+
+message ReadFileResponse {
+  bytes content = 1;
+  FileVersion version = 2;
+}
+
+message ReadFileStreamResponse {
+  oneof payload {
+    FileVersion version = 1;
+    bytes chunk = 2;
+  }
+}
+
+message StatRequest {
+  string logical_path = 1;
+}
+
+message StatResponse {
+  FileInfo info = 1;
+}
+
+message ListDirRequest {
+  string logical_dir = 1;
+}
+
+message ListDirResponse {
+  repeated DirEntry entries = 1;
+}
+
+message UpsertFilesRequest {
+  repeated PathWrite writes = 1;
+  MutationContext context = 2;
+}
+
+message DeletePathsRequest {
+  repeated PathDelete deletes = 1;
+  MutationContext context = 2;
+}
+
+message ListVersionsRequest {
+  string logical_path = 1;
+}
+
+message ListVersionsResponse {
+  repeated FileVersion versions = 1;
+}
+
+message GetVersionRequest {
+  string logical_path = 1;
+  string version_id = 2;
+}
+
+message GetVersionResponse {
+  VersionedFile file = 1;
+}
+
+message PutFileMeta {
+  string logical_path = 1;
+  string expected_version_id = 2;
+  MutationContext context = 3;
+}
+
+message PutFileStreamRequest {
+  oneof payload {
+    PutFileMeta meta = 1;
+    bytes chunk = 2;
+  }
+}
+
+message PutFileStreamResponse {
+  string batch_revision_id = 1;
+  FileVersion version = 2;
+}
+
+message WatchRequest {
+  repeated string prefixes = 1;
+}
+
+message WatchResponse {
+  ChangeEvent event = 1;
+}
+
+message MutationContext {
+  string principal_id = 1;
+  string reason = 2;
+  string correlation_id = 3;
+}
+
+message PathWrite {
+  string logical_path = 1;
+  bytes content = 2;
+  string expected_version_id = 3;
+}
+
+message PathDelete {
+  string logical_path = 1;
+  string expected_version_id = 2;
+}
+
+message BatchRevision {
+  string batch_revision_id = 1;
+  repeated FileVersion files = 2;
+}
+
+message FileVersion {
+  string logical_path = 1;
+  string version_id = 2;
+  string batch_revision_id = 3;
+  string content_sha256 = 4;
+  google.protobuf.Timestamp committed_at = 5;
+  bool tombstone = 6;
+  string principal_id = 7;
+  string reason = 8;
+}
+
+message VersionedFile {
+  FileVersion version = 1;
+  bytes content = 2;
+}
+
+message DirEntry {
+  string name = 1;
+  bool is_dir = 2;
+  int64 size = 3;
+}
+
+message FileInfo {
+  string path = 1;
+  int64 size = 2;
+  string version_id = 3;
+  google.protobuf.Timestamp mod_time = 4;
+}
+
+enum ChangeType {
+  CHANGE_TYPE_UNSPECIFIED = 0;
+  CHANGE_TYPE_ADDED = 1;
+  CHANGE_TYPE_MODIFIED = 2;
+  CHANGE_TYPE_DELETED = 3;
+}
+
+message ChangeEvent {
+  string logical_path = 1;
+  ChangeType type = 2;
+  string version_id = 3;
+  string batch_revision_id = 4;
+  google.protobuf.Timestamp committed_at = 5;
+}
