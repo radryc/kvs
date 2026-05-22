@@ -1,6 +1,6 @@
 module github.com/rydzu/ainfra/kvs
 
-go 1.25.0
+go 1.26.3
 
 require (
 	github.com/cockroachdb/pebble v1.1.5
