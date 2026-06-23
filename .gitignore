@@ -1,0 +1,37 @@
+# Compiled binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Coverage
+*.out
+coverage.html
+coverage.out
+
+# Build artifacts
+bin/
+dist/
+build/
+
+# Environment
+.env
+*.env.local
+*.local.env
+
+# Secrets/tokens
+*.swp
+*.swo
+keys.txt
+mytoken.txt
+
+# OS/IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
