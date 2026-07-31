@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.1
 // - protoc             v6.31.1
-// source: kvs/v1/kvs.proto
+// source: kvs.proto
 
 package kvsv1
 
@@ -500,5 +500,5 @@ var KVStore_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "kvs/v1/kvs.proto",
+	Metadata: "kvs.proto",
 }

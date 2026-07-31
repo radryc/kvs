@@ -3,7 +3,6 @@ package local
 import (
 	"archive/tar"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -18,9 +17,12 @@ import (
 	"time"
 
 	"github.com/cockroachdb/pebble"
+	kvsv1 "github.com/rydzu/ainfra/kvs/api/proto/kvs/v1"
 	"github.com/rydzu/ainfra/kvs/internal/versioning/digest"
 	"github.com/rydzu/ainfra/kvs/internal/versioning/revisions"
 	"github.com/rydzu/ainfra/kvs/pkg/kvsapi"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -1052,15 +1054,53 @@ func validateExpectedVersion(latest *versionManifest, expectedVersionID string) 
 }
 
 func encodeManifest(manifest versionManifest) ([]byte, error) {
-	return json.Marshal(manifest)
+	pm := &kvsv1.VersionManifest{
+		Version: &kvsv1.FileVersion{
+			LogicalPath:     manifest.Version.LogicalPath,
+			VersionId:       manifest.Version.VersionID,
+			BatchRevisionId: manifest.Version.BatchRevisionID,
+			ContentSha256:   manifest.Version.ContentSHA256,
+			CommittedAt:     timestamppb.New(manifest.Version.CommittedAt),
+			Tombstone:       manifest.Version.Tombstone,
+			PrincipalId:     manifest.Version.PrincipalID,
+			Reason:          manifest.Version.Reason,
+		},
+		PreviousVersionId: manifest.PreviousVersionID,
+		SizeBytes:         manifest.SizeBytes,
+		BlobPath:          manifest.BlobPath,
+		StorageClass:      manifest.StorageClass,
+	}
+	return proto.Marshal(pm)
 }
 
 func decodeManifest(data []byte) (versionManifest, error) {
-	var manifest versionManifest
-	if err := json.Unmarshal(data, &manifest); err != nil {
+	var pm kvsv1.VersionManifest
+	if err := proto.Unmarshal(data, &pm); err != nil {
 		return versionManifest{}, err
 	}
-	return manifest, nil
+	if pm.Version == nil {
+		return versionManifest{}, errors.New("version field missing in stored manifest")
+	}
+	var committedAt time.Time
+	if pm.Version.CommittedAt != nil {
+		committedAt = pm.Version.CommittedAt.AsTime()
+	}
+	return versionManifest{
+		Version: kvsapi.FileVersion{
+			LogicalPath:     pm.Version.LogicalPath,
+			VersionID:       pm.Version.VersionId,
+			BatchRevisionID: pm.Version.BatchRevisionId,
+			ContentSHA256:   pm.Version.ContentSha256,
+			CommittedAt:     committedAt,
+			Tombstone:       pm.Version.Tombstone,
+			PrincipalID:     pm.Version.PrincipalId,
+			Reason:          pm.Version.Reason,
+		},
+		PreviousVersionID: pm.PreviousVersionId,
+		SizeBytes:         pm.SizeBytes,
+		BlobPath:          pm.BlobPath,
+		StorageClass:      pm.StorageClass,
+	}, nil
 }
 
 func latestKey(logicalPath string) []byte {

@@ -149,6 +149,14 @@ message DirEntry {
   int64 size = 3;
 }
 
+message VersionManifest {
+  FileVersion version = 1;
+  string previous_version_id = 2;
+  int64 size_bytes = 3;
+  string blob_path = 4;
+  string storage_class = 5;
+}
+
 message FileInfo {
   string path = 1;
   int64 size = 2;

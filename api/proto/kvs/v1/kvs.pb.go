@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v6.31.1
-// source: kvs/v1/kvs.proto
+// source: kvs.proto
 
 package kvsv1
 
@@ -58,11 +58,11 @@ func (x ChangeType) String() string {
 }
 
 func (ChangeType) Descriptor() protoreflect.EnumDescriptor {
-	return file_kvs_v1_kvs_proto_enumTypes[0].Descriptor()
+	return file_kvs_proto_enumTypes[0].Descriptor()
 }
 
 func (ChangeType) Type() protoreflect.EnumType {
-	return &file_kvs_v1_kvs_proto_enumTypes[0]
+	return &file_kvs_proto_enumTypes[0]
 }
 
 func (x ChangeType) Number() protoreflect.EnumNumber {
@@ -71,7 +71,7 @@ func (x ChangeType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ChangeType.Descriptor instead.
 func (ChangeType) EnumDescriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{0}
+	return file_kvs_proto_rawDescGZIP(), []int{0}
 }
 
 type ReadFileRequest struct {
@@ -83,7 +83,7 @@ type ReadFileRequest struct {
 
 func (x *ReadFileRequest) Reset() {
 	*x = ReadFileRequest{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[0]
+	mi := &file_kvs_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -95,7 +95,7 @@ func (x *ReadFileRequest) String() string {
 func (*ReadFileRequest) ProtoMessage() {}
 
 func (x *ReadFileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[0]
+	mi := &file_kvs_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -108,7 +108,7 @@ func (x *ReadFileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadFileRequest.ProtoReflect.Descriptor instead.
 func (*ReadFileRequest) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{0}
+	return file_kvs_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *ReadFileRequest) GetLogicalPath() string {
@@ -128,7 +128,7 @@ type ReadFileResponse struct {
 
 func (x *ReadFileResponse) Reset() {
 	*x = ReadFileResponse{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[1]
+	mi := &file_kvs_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -140,7 +140,7 @@ func (x *ReadFileResponse) String() string {
 func (*ReadFileResponse) ProtoMessage() {}
 
 func (x *ReadFileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[1]
+	mi := &file_kvs_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -153,7 +153,7 @@ func (x *ReadFileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadFileResponse.ProtoReflect.Descriptor instead.
 func (*ReadFileResponse) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{1}
+	return file_kvs_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ReadFileResponse) GetContent() []byte {
@@ -183,7 +183,7 @@ type ReadFileStreamResponse struct {
 
 func (x *ReadFileStreamResponse) Reset() {
 	*x = ReadFileStreamResponse{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[2]
+	mi := &file_kvs_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -195,7 +195,7 @@ func (x *ReadFileStreamResponse) String() string {
 func (*ReadFileStreamResponse) ProtoMessage() {}
 
 func (x *ReadFileStreamResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[2]
+	mi := &file_kvs_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -208,7 +208,7 @@ func (x *ReadFileStreamResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadFileStreamResponse.ProtoReflect.Descriptor instead.
 func (*ReadFileStreamResponse) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{2}
+	return file_kvs_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ReadFileStreamResponse) GetPayload() isReadFileStreamResponse_Payload {
@@ -261,7 +261,7 @@ type StatRequest struct {
 
 func (x *StatRequest) Reset() {
 	*x = StatRequest{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[3]
+	mi := &file_kvs_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -273,7 +273,7 @@ func (x *StatRequest) String() string {
 func (*StatRequest) ProtoMessage() {}
 
 func (x *StatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[3]
+	mi := &file_kvs_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -286,7 +286,7 @@ func (x *StatRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatRequest.ProtoReflect.Descriptor instead.
 func (*StatRequest) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{3}
+	return file_kvs_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *StatRequest) GetLogicalPath() string {
@@ -305,7 +305,7 @@ type StatResponse struct {
 
 func (x *StatResponse) Reset() {
 	*x = StatResponse{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[4]
+	mi := &file_kvs_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -317,7 +317,7 @@ func (x *StatResponse) String() string {
 func (*StatResponse) ProtoMessage() {}
 
 func (x *StatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[4]
+	mi := &file_kvs_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -330,7 +330,7 @@ func (x *StatResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatResponse.ProtoReflect.Descriptor instead.
 func (*StatResponse) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{4}
+	return file_kvs_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *StatResponse) GetInfo() *FileInfo {
@@ -349,7 +349,7 @@ type ListDirRequest struct {
 
 func (x *ListDirRequest) Reset() {
 	*x = ListDirRequest{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[5]
+	mi := &file_kvs_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -361,7 +361,7 @@ func (x *ListDirRequest) String() string {
 func (*ListDirRequest) ProtoMessage() {}
 
 func (x *ListDirRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[5]
+	mi := &file_kvs_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -374,7 +374,7 @@ func (x *ListDirRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDirRequest.ProtoReflect.Descriptor instead.
 func (*ListDirRequest) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{5}
+	return file_kvs_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ListDirRequest) GetLogicalDir() string {
@@ -393,7 +393,7 @@ type ListDirResponse struct {
 
 func (x *ListDirResponse) Reset() {
 	*x = ListDirResponse{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[6]
+	mi := &file_kvs_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -405,7 +405,7 @@ func (x *ListDirResponse) String() string {
 func (*ListDirResponse) ProtoMessage() {}
 
 func (x *ListDirResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[6]
+	mi := &file_kvs_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -418,7 +418,7 @@ func (x *ListDirResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDirResponse.ProtoReflect.Descriptor instead.
 func (*ListDirResponse) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{6}
+	return file_kvs_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ListDirResponse) GetEntries() []*DirEntry {
@@ -438,7 +438,7 @@ type UpsertFilesRequest struct {
 
 func (x *UpsertFilesRequest) Reset() {
 	*x = UpsertFilesRequest{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[7]
+	mi := &file_kvs_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -450,7 +450,7 @@ func (x *UpsertFilesRequest) String() string {
 func (*UpsertFilesRequest) ProtoMessage() {}
 
 func (x *UpsertFilesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[7]
+	mi := &file_kvs_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -463,7 +463,7 @@ func (x *UpsertFilesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertFilesRequest.ProtoReflect.Descriptor instead.
 func (*UpsertFilesRequest) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{7}
+	return file_kvs_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *UpsertFilesRequest) GetWrites() []*PathWrite {
@@ -490,7 +490,7 @@ type DeletePathsRequest struct {
 
 func (x *DeletePathsRequest) Reset() {
 	*x = DeletePathsRequest{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[8]
+	mi := &file_kvs_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -502,7 +502,7 @@ func (x *DeletePathsRequest) String() string {
 func (*DeletePathsRequest) ProtoMessage() {}
 
 func (x *DeletePathsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[8]
+	mi := &file_kvs_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -515,7 +515,7 @@ func (x *DeletePathsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeletePathsRequest.ProtoReflect.Descriptor instead.
 func (*DeletePathsRequest) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{8}
+	return file_kvs_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *DeletePathsRequest) GetDeletes() []*PathDelete {
@@ -541,7 +541,7 @@ type ListVersionsRequest struct {
 
 func (x *ListVersionsRequest) Reset() {
 	*x = ListVersionsRequest{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[9]
+	mi := &file_kvs_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -553,7 +553,7 @@ func (x *ListVersionsRequest) String() string {
 func (*ListVersionsRequest) ProtoMessage() {}
 
 func (x *ListVersionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[9]
+	mi := &file_kvs_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -566,7 +566,7 @@ func (x *ListVersionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVersionsRequest.ProtoReflect.Descriptor instead.
 func (*ListVersionsRequest) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{9}
+	return file_kvs_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListVersionsRequest) GetLogicalPath() string {
@@ -585,7 +585,7 @@ type ListVersionsResponse struct {
 
 func (x *ListVersionsResponse) Reset() {
 	*x = ListVersionsResponse{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[10]
+	mi := &file_kvs_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -597,7 +597,7 @@ func (x *ListVersionsResponse) String() string {
 func (*ListVersionsResponse) ProtoMessage() {}
 
 func (x *ListVersionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[10]
+	mi := &file_kvs_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -610,7 +610,7 @@ func (x *ListVersionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVersionsResponse.ProtoReflect.Descriptor instead.
 func (*ListVersionsResponse) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{10}
+	return file_kvs_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ListVersionsResponse) GetVersions() []*FileVersion {
@@ -630,7 +630,7 @@ type GetVersionRequest struct {
 
 func (x *GetVersionRequest) Reset() {
 	*x = GetVersionRequest{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[11]
+	mi := &file_kvs_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -642,7 +642,7 @@ func (x *GetVersionRequest) String() string {
 func (*GetVersionRequest) ProtoMessage() {}
 
 func (x *GetVersionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[11]
+	mi := &file_kvs_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -655,7 +655,7 @@ func (x *GetVersionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVersionRequest.ProtoReflect.Descriptor instead.
 func (*GetVersionRequest) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{11}
+	return file_kvs_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *GetVersionRequest) GetLogicalPath() string {
@@ -681,7 +681,7 @@ type GetVersionResponse struct {
 
 func (x *GetVersionResponse) Reset() {
 	*x = GetVersionResponse{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[12]
+	mi := &file_kvs_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -693,7 +693,7 @@ func (x *GetVersionResponse) String() string {
 func (*GetVersionResponse) ProtoMessage() {}
 
 func (x *GetVersionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[12]
+	mi := &file_kvs_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -706,7 +706,7 @@ func (x *GetVersionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVersionResponse.ProtoReflect.Descriptor instead.
 func (*GetVersionResponse) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{12}
+	return file_kvs_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetVersionResponse) GetFile() *VersionedFile {
@@ -727,7 +727,7 @@ type PutFileMeta struct {
 
 func (x *PutFileMeta) Reset() {
 	*x = PutFileMeta{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[13]
+	mi := &file_kvs_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -739,7 +739,7 @@ func (x *PutFileMeta) String() string {
 func (*PutFileMeta) ProtoMessage() {}
 
 func (x *PutFileMeta) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[13]
+	mi := &file_kvs_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -752,7 +752,7 @@ func (x *PutFileMeta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutFileMeta.ProtoReflect.Descriptor instead.
 func (*PutFileMeta) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{13}
+	return file_kvs_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *PutFileMeta) GetLogicalPath() string {
@@ -789,7 +789,7 @@ type PutFileStreamRequest struct {
 
 func (x *PutFileStreamRequest) Reset() {
 	*x = PutFileStreamRequest{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[14]
+	mi := &file_kvs_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -801,7 +801,7 @@ func (x *PutFileStreamRequest) String() string {
 func (*PutFileStreamRequest) ProtoMessage() {}
 
 func (x *PutFileStreamRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[14]
+	mi := &file_kvs_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -814,7 +814,7 @@ func (x *PutFileStreamRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutFileStreamRequest.ProtoReflect.Descriptor instead.
 func (*PutFileStreamRequest) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{14}
+	return file_kvs_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PutFileStreamRequest) GetPayload() isPutFileStreamRequest_Payload {
@@ -868,7 +868,7 @@ type PutFileStreamResponse struct {
 
 func (x *PutFileStreamResponse) Reset() {
 	*x = PutFileStreamResponse{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[15]
+	mi := &file_kvs_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -880,7 +880,7 @@ func (x *PutFileStreamResponse) String() string {
 func (*PutFileStreamResponse) ProtoMessage() {}
 
 func (x *PutFileStreamResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[15]
+	mi := &file_kvs_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -893,7 +893,7 @@ func (x *PutFileStreamResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutFileStreamResponse.ProtoReflect.Descriptor instead.
 func (*PutFileStreamResponse) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{15}
+	return file_kvs_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *PutFileStreamResponse) GetBatchRevisionId() string {
@@ -919,7 +919,7 @@ type WatchRequest struct {
 
 func (x *WatchRequest) Reset() {
 	*x = WatchRequest{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[16]
+	mi := &file_kvs_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -931,7 +931,7 @@ func (x *WatchRequest) String() string {
 func (*WatchRequest) ProtoMessage() {}
 
 func (x *WatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[16]
+	mi := &file_kvs_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -944,7 +944,7 @@ func (x *WatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchRequest.ProtoReflect.Descriptor instead.
 func (*WatchRequest) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{16}
+	return file_kvs_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *WatchRequest) GetPrefixes() []string {
@@ -963,7 +963,7 @@ type WatchResponse struct {
 
 func (x *WatchResponse) Reset() {
 	*x = WatchResponse{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[17]
+	mi := &file_kvs_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -975,7 +975,7 @@ func (x *WatchResponse) String() string {
 func (*WatchResponse) ProtoMessage() {}
 
 func (x *WatchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[17]
+	mi := &file_kvs_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -988,7 +988,7 @@ func (x *WatchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchResponse.ProtoReflect.Descriptor instead.
 func (*WatchResponse) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{17}
+	return file_kvs_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *WatchResponse) GetEvent() *ChangeEvent {
@@ -1009,7 +1009,7 @@ type MutationContext struct {
 
 func (x *MutationContext) Reset() {
 	*x = MutationContext{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[18]
+	mi := &file_kvs_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1021,7 +1021,7 @@ func (x *MutationContext) String() string {
 func (*MutationContext) ProtoMessage() {}
 
 func (x *MutationContext) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[18]
+	mi := &file_kvs_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1034,7 +1034,7 @@ func (x *MutationContext) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MutationContext.ProtoReflect.Descriptor instead.
 func (*MutationContext) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{18}
+	return file_kvs_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *MutationContext) GetPrincipalId() string {
@@ -1069,7 +1069,7 @@ type PathWrite struct {
 
 func (x *PathWrite) Reset() {
 	*x = PathWrite{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[19]
+	mi := &file_kvs_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1081,7 +1081,7 @@ func (x *PathWrite) String() string {
 func (*PathWrite) ProtoMessage() {}
 
 func (x *PathWrite) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[19]
+	mi := &file_kvs_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1094,7 +1094,7 @@ func (x *PathWrite) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PathWrite.ProtoReflect.Descriptor instead.
 func (*PathWrite) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{19}
+	return file_kvs_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *PathWrite) GetLogicalPath() string {
@@ -1128,7 +1128,7 @@ type PathDelete struct {
 
 func (x *PathDelete) Reset() {
 	*x = PathDelete{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[20]
+	mi := &file_kvs_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1140,7 +1140,7 @@ func (x *PathDelete) String() string {
 func (*PathDelete) ProtoMessage() {}
 
 func (x *PathDelete) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[20]
+	mi := &file_kvs_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1153,7 +1153,7 @@ func (x *PathDelete) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PathDelete.ProtoReflect.Descriptor instead.
 func (*PathDelete) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{20}
+	return file_kvs_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *PathDelete) GetLogicalPath() string {
@@ -1180,7 +1180,7 @@ type BatchRevision struct {
 
 func (x *BatchRevision) Reset() {
 	*x = BatchRevision{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[21]
+	mi := &file_kvs_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1192,7 +1192,7 @@ func (x *BatchRevision) String() string {
 func (*BatchRevision) ProtoMessage() {}
 
 func (x *BatchRevision) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[21]
+	mi := &file_kvs_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1205,7 +1205,7 @@ func (x *BatchRevision) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchRevision.ProtoReflect.Descriptor instead.
 func (*BatchRevision) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{21}
+	return file_kvs_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *BatchRevision) GetBatchRevisionId() string {
@@ -1238,7 +1238,7 @@ type FileVersion struct {
 
 func (x *FileVersion) Reset() {
 	*x = FileVersion{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[22]
+	mi := &file_kvs_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1250,7 +1250,7 @@ func (x *FileVersion) String() string {
 func (*FileVersion) ProtoMessage() {}
 
 func (x *FileVersion) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[22]
+	mi := &file_kvs_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1263,7 +1263,7 @@ func (x *FileVersion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileVersion.ProtoReflect.Descriptor instead.
 func (*FileVersion) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{22}
+	return file_kvs_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *FileVersion) GetLogicalPath() string {
@@ -1332,7 +1332,7 @@ type VersionedFile struct {
 
 func (x *VersionedFile) Reset() {
 	*x = VersionedFile{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[23]
+	mi := &file_kvs_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1344,7 +1344,7 @@ func (x *VersionedFile) String() string {
 func (*VersionedFile) ProtoMessage() {}
 
 func (x *VersionedFile) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[23]
+	mi := &file_kvs_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1357,7 +1357,7 @@ func (x *VersionedFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VersionedFile.ProtoReflect.Descriptor instead.
 func (*VersionedFile) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{23}
+	return file_kvs_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *VersionedFile) GetVersion() *FileVersion {
@@ -1385,7 +1385,7 @@ type DirEntry struct {
 
 func (x *DirEntry) Reset() {
 	*x = DirEntry{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[24]
+	mi := &file_kvs_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1397,7 +1397,7 @@ func (x *DirEntry) String() string {
 func (*DirEntry) ProtoMessage() {}
 
 func (x *DirEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[24]
+	mi := &file_kvs_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1410,7 +1410,7 @@ func (x *DirEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DirEntry.ProtoReflect.Descriptor instead.
 func (*DirEntry) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{24}
+	return file_kvs_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *DirEntry) GetName() string {
@@ -1434,6 +1434,82 @@ func (x *DirEntry) GetSize() int64 {
 	return 0
 }
 
+type VersionManifest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Version           *FileVersion           `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	PreviousVersionId string                 `protobuf:"bytes,2,opt,name=previous_version_id,json=previousVersionId,proto3" json:"previous_version_id,omitempty"`
+	SizeBytes         int64                  `protobuf:"varint,3,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	BlobPath          string                 `protobuf:"bytes,4,opt,name=blob_path,json=blobPath,proto3" json:"blob_path,omitempty"`
+	StorageClass      string                 `protobuf:"bytes,5,opt,name=storage_class,json=storageClass,proto3" json:"storage_class,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *VersionManifest) Reset() {
+	*x = VersionManifest{}
+	mi := &file_kvs_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VersionManifest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VersionManifest) ProtoMessage() {}
+
+func (x *VersionManifest) ProtoReflect() protoreflect.Message {
+	mi := &file_kvs_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VersionManifest.ProtoReflect.Descriptor instead.
+func (*VersionManifest) Descriptor() ([]byte, []int) {
+	return file_kvs_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *VersionManifest) GetVersion() *FileVersion {
+	if x != nil {
+		return x.Version
+	}
+	return nil
+}
+
+func (x *VersionManifest) GetPreviousVersionId() string {
+	if x != nil {
+		return x.PreviousVersionId
+	}
+	return ""
+}
+
+func (x *VersionManifest) GetSizeBytes() int64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+func (x *VersionManifest) GetBlobPath() string {
+	if x != nil {
+		return x.BlobPath
+	}
+	return ""
+}
+
+func (x *VersionManifest) GetStorageClass() string {
+	if x != nil {
+		return x.StorageClass
+	}
+	return ""
+}
+
 type FileInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
@@ -1446,7 +1522,7 @@ type FileInfo struct {
 
 func (x *FileInfo) Reset() {
 	*x = FileInfo{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[25]
+	mi := &file_kvs_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1458,7 +1534,7 @@ func (x *FileInfo) String() string {
 func (*FileInfo) ProtoMessage() {}
 
 func (x *FileInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[25]
+	mi := &file_kvs_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1471,7 +1547,7 @@ func (x *FileInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileInfo.ProtoReflect.Descriptor instead.
 func (*FileInfo) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{25}
+	return file_kvs_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *FileInfo) GetPath() string {
@@ -1515,7 +1591,7 @@ type ChangeEvent struct {
 
 func (x *ChangeEvent) Reset() {
 	*x = ChangeEvent{}
-	mi := &file_kvs_v1_kvs_proto_msgTypes[26]
+	mi := &file_kvs_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1527,7 +1603,7 @@ func (x *ChangeEvent) String() string {
 func (*ChangeEvent) ProtoMessage() {}
 
 func (x *ChangeEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_kvs_v1_kvs_proto_msgTypes[26]
+	mi := &file_kvs_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1540,7 +1616,7 @@ func (x *ChangeEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangeEvent.ProtoReflect.Descriptor instead.
 func (*ChangeEvent) Descriptor() ([]byte, []int) {
-	return file_kvs_v1_kvs_proto_rawDescGZIP(), []int{26}
+	return file_kvs_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ChangeEvent) GetLogicalPath() string {
@@ -1578,11 +1654,11 @@ func (x *ChangeEvent) GetCommittedAt() *timestamppb.Timestamp {
 	return nil
 }
 
-var File_kvs_v1_kvs_proto protoreflect.FileDescriptor
+var File_kvs_proto protoreflect.FileDescriptor
 
-const file_kvs_v1_kvs_proto_rawDesc = "" +
+const file_kvs_proto_rawDesc = "" +
 	"\n" +
-	"\x10kvs/v1/kvs.proto\x12\x06kvs.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"4\n" +
+	"\tkvs.proto\x12\x06kvs.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"4\n" +
 	"\x0fReadFileRequest\x12!\n" +
 	"\flogical_path\x18\x01 \x01(\tR\vlogicalPath\"[\n" +
 	"\x10ReadFileResponse\x12\x18\n" +
@@ -1663,7 +1739,14 @@ const file_kvs_v1_kvs_proto_rawDesc = "" +
 	"\bDirEntry\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x15\n" +
 	"\x06is_dir\x18\x02 \x01(\bR\x05isDir\x12\x12\n" +
-	"\x04size\x18\x03 \x01(\x03R\x04size\"\x88\x01\n" +
+	"\x04size\x18\x03 \x01(\x03R\x04size\"\xd1\x01\n" +
+	"\x0fVersionManifest\x12-\n" +
+	"\aversion\x18\x01 \x01(\v2\x13.kvs.v1.FileVersionR\aversion\x12.\n" +
+	"\x13previous_version_id\x18\x02 \x01(\tR\x11previousVersionId\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x03 \x01(\x03R\tsizeBytes\x12\x1b\n" +
+	"\tblob_path\x18\x04 \x01(\tR\bblobPath\x12#\n" +
+	"\rstorage_class\x18\x05 \x01(\tR\fstorageClass\"\x88\x01\n" +
 	"\bFileInfo\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x12\n" +
 	"\x04size\x18\x02 \x01(\x03R\x04size\x12\x1d\n" +
@@ -1698,20 +1781,20 @@ const file_kvs_v1_kvs_proto_rawDesc = "" +
 	"\x05Watch\x12\x14.kvs.v1.WatchRequest\x1a\x15.kvs.v1.WatchResponse0\x01B4Z2github.com/rydzu/ainfra/kvs/api/proto/kvs/v1;kvsv1b\x06proto3"
 
 var (
-	file_kvs_v1_kvs_proto_rawDescOnce sync.Once
-	file_kvs_v1_kvs_proto_rawDescData []byte
+	file_kvs_proto_rawDescOnce sync.Once
+	file_kvs_proto_rawDescData []byte
 )
 
-func file_kvs_v1_kvs_proto_rawDescGZIP() []byte {
-	file_kvs_v1_kvs_proto_rawDescOnce.Do(func() {
-		file_kvs_v1_kvs_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_kvs_v1_kvs_proto_rawDesc), len(file_kvs_v1_kvs_proto_rawDesc)))
+func file_kvs_proto_rawDescGZIP() []byte {
+	file_kvs_proto_rawDescOnce.Do(func() {
+		file_kvs_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_kvs_proto_rawDesc), len(file_kvs_proto_rawDesc)))
 	})
-	return file_kvs_v1_kvs_proto_rawDescData
+	return file_kvs_proto_rawDescData
 }
 
-var file_kvs_v1_kvs_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_kvs_v1_kvs_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
-var file_kvs_v1_kvs_proto_goTypes = []any{
+var file_kvs_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_kvs_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
+var file_kvs_proto_goTypes = []any{
 	(ChangeType)(0),                // 0: kvs.v1.ChangeType
 	(*ReadFileRequest)(nil),        // 1: kvs.v1.ReadFileRequest
 	(*ReadFileResponse)(nil),       // 2: kvs.v1.ReadFileResponse
@@ -1738,14 +1821,15 @@ var file_kvs_v1_kvs_proto_goTypes = []any{
 	(*FileVersion)(nil),            // 23: kvs.v1.FileVersion
 	(*VersionedFile)(nil),          // 24: kvs.v1.VersionedFile
 	(*DirEntry)(nil),               // 25: kvs.v1.DirEntry
-	(*FileInfo)(nil),               // 26: kvs.v1.FileInfo
-	(*ChangeEvent)(nil),            // 27: kvs.v1.ChangeEvent
-	(*timestamppb.Timestamp)(nil),  // 28: google.protobuf.Timestamp
+	(*VersionManifest)(nil),        // 26: kvs.v1.VersionManifest
+	(*FileInfo)(nil),               // 27: kvs.v1.FileInfo
+	(*ChangeEvent)(nil),            // 28: kvs.v1.ChangeEvent
+	(*timestamppb.Timestamp)(nil),  // 29: google.protobuf.Timestamp
 }
-var file_kvs_v1_kvs_proto_depIdxs = []int32{
+var file_kvs_proto_depIdxs = []int32{
 	23, // 0: kvs.v1.ReadFileResponse.version:type_name -> kvs.v1.FileVersion
 	23, // 1: kvs.v1.ReadFileStreamResponse.version:type_name -> kvs.v1.FileVersion
-	26, // 2: kvs.v1.StatResponse.info:type_name -> kvs.v1.FileInfo
+	27, // 2: kvs.v1.StatResponse.info:type_name -> kvs.v1.FileInfo
 	25, // 3: kvs.v1.ListDirResponse.entries:type_name -> kvs.v1.DirEntry
 	20, // 4: kvs.v1.UpsertFilesRequest.writes:type_name -> kvs.v1.PathWrite
 	19, // 5: kvs.v1.UpsertFilesRequest.context:type_name -> kvs.v1.MutationContext
@@ -1756,52 +1840,53 @@ var file_kvs_v1_kvs_proto_depIdxs = []int32{
 	19, // 10: kvs.v1.PutFileMeta.context:type_name -> kvs.v1.MutationContext
 	14, // 11: kvs.v1.PutFileStreamRequest.meta:type_name -> kvs.v1.PutFileMeta
 	23, // 12: kvs.v1.PutFileStreamResponse.version:type_name -> kvs.v1.FileVersion
-	27, // 13: kvs.v1.WatchResponse.event:type_name -> kvs.v1.ChangeEvent
+	28, // 13: kvs.v1.WatchResponse.event:type_name -> kvs.v1.ChangeEvent
 	23, // 14: kvs.v1.BatchRevision.files:type_name -> kvs.v1.FileVersion
-	28, // 15: kvs.v1.FileVersion.committed_at:type_name -> google.protobuf.Timestamp
+	29, // 15: kvs.v1.FileVersion.committed_at:type_name -> google.protobuf.Timestamp
 	23, // 16: kvs.v1.VersionedFile.version:type_name -> kvs.v1.FileVersion
-	28, // 17: kvs.v1.FileInfo.mod_time:type_name -> google.protobuf.Timestamp
-	0,  // 18: kvs.v1.ChangeEvent.type:type_name -> kvs.v1.ChangeType
-	28, // 19: kvs.v1.ChangeEvent.committed_at:type_name -> google.protobuf.Timestamp
-	1,  // 20: kvs.v1.KVStore.ReadFile:input_type -> kvs.v1.ReadFileRequest
-	1,  // 21: kvs.v1.KVStore.ReadFileStream:input_type -> kvs.v1.ReadFileRequest
-	4,  // 22: kvs.v1.KVStore.Stat:input_type -> kvs.v1.StatRequest
-	6,  // 23: kvs.v1.KVStore.ListDir:input_type -> kvs.v1.ListDirRequest
-	8,  // 24: kvs.v1.KVStore.UpsertFiles:input_type -> kvs.v1.UpsertFilesRequest
-	9,  // 25: kvs.v1.KVStore.DeletePaths:input_type -> kvs.v1.DeletePathsRequest
-	10, // 26: kvs.v1.KVStore.ListVersions:input_type -> kvs.v1.ListVersionsRequest
-	12, // 27: kvs.v1.KVStore.GetVersion:input_type -> kvs.v1.GetVersionRequest
-	12, // 28: kvs.v1.KVStore.GetVersionStream:input_type -> kvs.v1.GetVersionRequest
-	15, // 29: kvs.v1.KVStore.PutFileStream:input_type -> kvs.v1.PutFileStreamRequest
-	17, // 30: kvs.v1.KVStore.Watch:input_type -> kvs.v1.WatchRequest
-	2,  // 31: kvs.v1.KVStore.ReadFile:output_type -> kvs.v1.ReadFileResponse
-	3,  // 32: kvs.v1.KVStore.ReadFileStream:output_type -> kvs.v1.ReadFileStreamResponse
-	5,  // 33: kvs.v1.KVStore.Stat:output_type -> kvs.v1.StatResponse
-	7,  // 34: kvs.v1.KVStore.ListDir:output_type -> kvs.v1.ListDirResponse
-	22, // 35: kvs.v1.KVStore.UpsertFiles:output_type -> kvs.v1.BatchRevision
-	22, // 36: kvs.v1.KVStore.DeletePaths:output_type -> kvs.v1.BatchRevision
-	11, // 37: kvs.v1.KVStore.ListVersions:output_type -> kvs.v1.ListVersionsResponse
-	13, // 38: kvs.v1.KVStore.GetVersion:output_type -> kvs.v1.GetVersionResponse
-	3,  // 39: kvs.v1.KVStore.GetVersionStream:output_type -> kvs.v1.ReadFileStreamResponse
-	16, // 40: kvs.v1.KVStore.PutFileStream:output_type -> kvs.v1.PutFileStreamResponse
-	18, // 41: kvs.v1.KVStore.Watch:output_type -> kvs.v1.WatchResponse
-	31, // [31:42] is the sub-list for method output_type
-	20, // [20:31] is the sub-list for method input_type
-	20, // [20:20] is the sub-list for extension type_name
-	20, // [20:20] is the sub-list for extension extendee
-	0,  // [0:20] is the sub-list for field type_name
+	23, // 17: kvs.v1.VersionManifest.version:type_name -> kvs.v1.FileVersion
+	29, // 18: kvs.v1.FileInfo.mod_time:type_name -> google.protobuf.Timestamp
+	0,  // 19: kvs.v1.ChangeEvent.type:type_name -> kvs.v1.ChangeType
+	29, // 20: kvs.v1.ChangeEvent.committed_at:type_name -> google.protobuf.Timestamp
+	1,  // 21: kvs.v1.KVStore.ReadFile:input_type -> kvs.v1.ReadFileRequest
+	1,  // 22: kvs.v1.KVStore.ReadFileStream:input_type -> kvs.v1.ReadFileRequest
+	4,  // 23: kvs.v1.KVStore.Stat:input_type -> kvs.v1.StatRequest
+	6,  // 24: kvs.v1.KVStore.ListDir:input_type -> kvs.v1.ListDirRequest
+	8,  // 25: kvs.v1.KVStore.UpsertFiles:input_type -> kvs.v1.UpsertFilesRequest
+	9,  // 26: kvs.v1.KVStore.DeletePaths:input_type -> kvs.v1.DeletePathsRequest
+	10, // 27: kvs.v1.KVStore.ListVersions:input_type -> kvs.v1.ListVersionsRequest
+	12, // 28: kvs.v1.KVStore.GetVersion:input_type -> kvs.v1.GetVersionRequest
+	12, // 29: kvs.v1.KVStore.GetVersionStream:input_type -> kvs.v1.GetVersionRequest
+	15, // 30: kvs.v1.KVStore.PutFileStream:input_type -> kvs.v1.PutFileStreamRequest
+	17, // 31: kvs.v1.KVStore.Watch:input_type -> kvs.v1.WatchRequest
+	2,  // 32: kvs.v1.KVStore.ReadFile:output_type -> kvs.v1.ReadFileResponse
+	3,  // 33: kvs.v1.KVStore.ReadFileStream:output_type -> kvs.v1.ReadFileStreamResponse
+	5,  // 34: kvs.v1.KVStore.Stat:output_type -> kvs.v1.StatResponse
+	7,  // 35: kvs.v1.KVStore.ListDir:output_type -> kvs.v1.ListDirResponse
+	22, // 36: kvs.v1.KVStore.UpsertFiles:output_type -> kvs.v1.BatchRevision
+	22, // 37: kvs.v1.KVStore.DeletePaths:output_type -> kvs.v1.BatchRevision
+	11, // 38: kvs.v1.KVStore.ListVersions:output_type -> kvs.v1.ListVersionsResponse
+	13, // 39: kvs.v1.KVStore.GetVersion:output_type -> kvs.v1.GetVersionResponse
+	3,  // 40: kvs.v1.KVStore.GetVersionStream:output_type -> kvs.v1.ReadFileStreamResponse
+	16, // 41: kvs.v1.KVStore.PutFileStream:output_type -> kvs.v1.PutFileStreamResponse
+	18, // 42: kvs.v1.KVStore.Watch:output_type -> kvs.v1.WatchResponse
+	32, // [32:43] is the sub-list for method output_type
+	21, // [21:32] is the sub-list for method input_type
+	21, // [21:21] is the sub-list for extension type_name
+	21, // [21:21] is the sub-list for extension extendee
+	0,  // [0:21] is the sub-list for field type_name
 }
 
-func init() { file_kvs_v1_kvs_proto_init() }
-func file_kvs_v1_kvs_proto_init() {
-	if File_kvs_v1_kvs_proto != nil {
+func init() { file_kvs_proto_init() }
+func file_kvs_proto_init() {
+	if File_kvs_proto != nil {
 		return
 	}
-	file_kvs_v1_kvs_proto_msgTypes[2].OneofWrappers = []any{
+	file_kvs_proto_msgTypes[2].OneofWrappers = []any{
 		(*ReadFileStreamResponse_Version)(nil),
 		(*ReadFileStreamResponse_Chunk)(nil),
 	}
-	file_kvs_v1_kvs_proto_msgTypes[14].OneofWrappers = []any{
+	file_kvs_proto_msgTypes[14].OneofWrappers = []any{
 		(*PutFileStreamRequest_Meta)(nil),
 		(*PutFileStreamRequest_Chunk)(nil),
 	}
@@ -1809,18 +1894,18 @@ func file_kvs_v1_kvs_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kvs_v1_kvs_proto_rawDesc), len(file_kvs_v1_kvs_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kvs_proto_rawDesc), len(file_kvs_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   27,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_kvs_v1_kvs_proto_goTypes,
-		DependencyIndexes: file_kvs_v1_kvs_proto_depIdxs,
-		EnumInfos:         file_kvs_v1_kvs_proto_enumTypes,
-		MessageInfos:      file_kvs_v1_kvs_proto_msgTypes,
+		GoTypes:           file_kvs_proto_goTypes,
+		DependencyIndexes: file_kvs_proto_depIdxs,
+		EnumInfos:         file_kvs_proto_enumTypes,
+		MessageInfos:      file_kvs_proto_msgTypes,
 	}.Build()
-	File_kvs_v1_kvs_proto = out.File
-	file_kvs_v1_kvs_proto_goTypes = nil
-	file_kvs_v1_kvs_proto_depIdxs = nil
+	File_kvs_proto = out.File
+	file_kvs_proto_goTypes = nil
+	file_kvs_proto_depIdxs = nil
 }
