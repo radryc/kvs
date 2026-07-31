@@ -15,9 +15,9 @@ import (
 
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb/v2"
-	kvsv1 "github.com/rydzu/ainfra/kvs/api/proto/kvs/v1"
-	"github.com/rydzu/ainfra/kvs/internal/store/local"
-	"github.com/rydzu/ainfra/kvs/pkg/kvsapi"
+	kvsv1 "github.com/radryc/kvs/api/proto/kvs/v1"
+	"github.com/radryc/kvs/internal/store/local"
+	"github.com/radryc/kvs/pkg/kvsapi"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rydzu/ainfra/kvs/pkg/kvsapi"
+	"github.com/radryc/kvs/pkg/kvsapi"
 )
 
 func TestStoreUpsertReadReopenAndListVersions(t *testing.T) {

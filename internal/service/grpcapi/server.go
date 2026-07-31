@@ -8,8 +8,8 @@ import (
 	"io/fs"
 	"strings"
 
-	kvsv1 "github.com/rydzu/ainfra/kvs/api/proto/kvs/v1"
-	"github.com/rydzu/ainfra/kvs/pkg/kvsapi"
+	kvsv1 "github.com/radryc/kvs/api/proto/kvs/v1"
+	"github.com/radryc/kvs/pkg/kvsapi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"

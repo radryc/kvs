@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	kvsv1 "github.com/rydzu/ainfra/kvs/api/proto/kvs/v1"
-	"github.com/rydzu/ainfra/kvs/internal/store/local"
+	kvsv1 "github.com/radryc/kvs/api/proto/kvs/v1"
+	"github.com/radryc/kvs/internal/store/local"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"

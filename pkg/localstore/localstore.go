@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/rydzu/ainfra/kvs/internal/store/local"
-	"github.com/rydzu/ainfra/kvs/pkg/kvsapi"
+	"github.com/radryc/kvs/internal/store/local"
+	"github.com/radryc/kvs/pkg/kvsapi"
 )
 
 type Config struct {

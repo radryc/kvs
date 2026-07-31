@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rydzu/ainfra/kvs/pkg/grpcserver"
-	"github.com/rydzu/ainfra/kvs/pkg/kvsapi"
+	"github.com/radryc/kvs/pkg/grpcserver"
+	"github.com/radryc/kvs/pkg/kvsapi"
 	"google.golang.org/grpc"
 )
 

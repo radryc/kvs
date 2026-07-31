@@ -1,4 +1,4 @@
-module github.com/rydzu/ainfra/kvs
+module github.com/radryc/kvs
 
 go 1.26.4
 

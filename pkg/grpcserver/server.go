@@ -1,9 +1,9 @@
 package grpcserver
 
 import (
-	kvsv1 "github.com/rydzu/ainfra/kvs/api/proto/kvs/v1"
-	grpcapi "github.com/rydzu/ainfra/kvs/internal/service/grpcapi"
-	"github.com/rydzu/ainfra/kvs/pkg/kvsapi"
+	kvsv1 "github.com/radryc/kvs/api/proto/kvs/v1"
+	grpcapi "github.com/radryc/kvs/internal/service/grpcapi"
+	"github.com/radryc/kvs/pkg/kvsapi"
 	"google.golang.org/grpc"
 )
 

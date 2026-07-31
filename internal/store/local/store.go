@@ -17,10 +17,10 @@ import (
 	"time"
 
 	"github.com/cockroachdb/pebble"
-	kvsv1 "github.com/rydzu/ainfra/kvs/api/proto/kvs/v1"
-	"github.com/rydzu/ainfra/kvs/internal/versioning/digest"
-	"github.com/rydzu/ainfra/kvs/internal/versioning/revisions"
-	"github.com/rydzu/ainfra/kvs/pkg/kvsapi"
+	kvsv1 "github.com/radryc/kvs/api/proto/kvs/v1"
+	"github.com/radryc/kvs/internal/versioning/digest"
+	"github.com/radryc/kvs/internal/versioning/revisions"
+	"github.com/radryc/kvs/pkg/kvsapi"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )

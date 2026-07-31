@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package kvs.v1;
 
-option go_package = "github.com/rydzu/ainfra/kvs/api/proto/kvs/v1;kvsv1";
+option go_package = "github.com/radryc/kvs/api/proto/kvs/v1;kvsv1";
 
 import "google/protobuf/timestamp.proto";
 
