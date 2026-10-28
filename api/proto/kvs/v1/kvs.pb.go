@@ -1778,7 +1778,7 @@ const file_kvs_proto_rawDesc = "" +
 	"GetVersion\x12\x19.kvs.v1.GetVersionRequest\x1a\x1a.kvs.v1.GetVersionResponse\x12O\n" +
 	"\x10GetVersionStream\x12\x19.kvs.v1.GetVersionRequest\x1a\x1e.kvs.v1.ReadFileStreamResponse0\x01\x12N\n" +
 	"\rPutFileStream\x12\x1c.kvs.v1.PutFileStreamRequest\x1a\x1d.kvs.v1.PutFileStreamResponse(\x01\x126\n" +
-	"\x05Watch\x12\x14.kvs.v1.WatchRequest\x1a\x15.kvs.v1.WatchResponse0\x01B4Z2github.com/radryc/kvs/api/proto/kvs/v1;kvsv1b\x06proto3"
+	"\x05Watch\x12\x14.kvs.v1.WatchRequest\x1a\x15.kvs.v1.WatchResponse0\x01B.Z,github.com/radryc/kvs/api/proto/kvs/v1;kvsv1b\x06proto3"
 
 var (
 	file_kvs_proto_rawDescOnce sync.Once
