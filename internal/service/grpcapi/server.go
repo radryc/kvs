@@ -369,6 +369,12 @@ func toStatus(err error) error {
 	if s, ok := status.FromError(err); ok {
 		return s.Err()
 	}
+	if errors.Is(err, kvsapi.ErrNotLeader) {
+		return status.Error(codes.Aborted, err.Error())
+	}
+	if errors.Is(err, kvsapi.ErrLeaderUnknown) {
+		return status.Error(codes.Unavailable, err.Error())
+	}
 	if errors.Is(err, kvsapi.ErrConflict) {
 		return status.Error(codes.Aborted, err.Error())
 	}

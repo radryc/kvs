@@ -6,7 +6,16 @@ import (
 	"time"
 )
 
-var ErrConflict = errors.New("kvsapi: version conflict")
+var (
+	ErrConflict = errors.New("kvsapi: version conflict")
+	// ErrNotLeader means the request reached a node that cannot commit the
+	// mutation (usually because leadership changed). Callers may retry against
+	// another node or after refreshing the leader.
+	ErrNotLeader = errors.New("kvsapi: not leader")
+	// ErrLeaderUnknown means this node is a follower but cannot resolve the
+	// current leader's API endpoint. It is always retryable.
+	ErrLeaderUnknown = errors.New("kvsapi: leader unknown")
+)
 
 type ReadStore interface {
 	ReadFile(ctx context.Context, logicalPath string) ([]byte, error)
@@ -42,13 +51,15 @@ type Store interface {
 }
 
 type StoreStatus struct {
-	Enabled   bool   `json:"enabled"`
-	Healthy   bool   `json:"healthy"`
-	Mode      string `json:"mode"`
-	Role      string `json:"role"`
-	LeaderID  string `json:"leaderID,omitempty"`
-	PeerCount int32  `json:"peerCount"`
-	KeyCount  int64  `json:"keyCount"`
+	Enabled       bool   `json:"enabled"`
+	Healthy       bool   `json:"healthy"`
+	Mode          string `json:"mode"`
+	Role          string `json:"role"`
+	LeaderID      string `json:"leaderID,omitempty"`
+	LeaderAddress string `json:"leaderAddress,omitempty"`
+	Term          uint64 `json:"term,omitempty"`
+	PeerCount     int32  `json:"peerCount"`
+	KeyCount      int64  `json:"keyCount"`
 }
 
 type DirEntry struct {
