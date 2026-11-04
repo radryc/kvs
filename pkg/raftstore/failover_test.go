@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -249,5 +250,35 @@ func TestStatusReportsLeaderAddressAndTerm(t *testing.T) {
 	}
 	if status.Role != "leader" {
 		t.Fatalf("leader status role = %q, want leader", status.Role)
+	}
+}
+
+func TestForwardedMissingReadMapsToNotExist(t *testing.T) {
+	nodes, cleanup := startTestCluster(t, 3)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	leader := waitForClusterLeader(t, ctx, nodes)
+
+	var follower *testClusterNode
+	for _, node := range nodes {
+		if node != leader && node.store.raft.State() == raft.Follower {
+			follower = node
+			break
+		}
+	}
+	if follower == nil {
+		t.Fatal("no follower found")
+	}
+
+	if _, err := follower.store.ReadFile(ctx, "/missing/file.yaml"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("ReadFile() error = %v, want os.ErrNotExist", err)
+	}
+	if _, err := follower.store.Stat(ctx, "/missing/file.yaml"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Stat() error = %v, want os.ErrNotExist", err)
+	}
+	if _, err := follower.store.ListDir(ctx, "/missing"); err != nil {
+		t.Fatalf("ListDir() error = %v, want empty result", err)
 	}
 }

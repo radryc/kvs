@@ -416,7 +416,7 @@ func (s *Store) ReadFile(ctx context.Context, logicalPath string) ([]byte, error
 	if client, err := s.forwardClient(); err == nil {
 		resp, err := client.ReadFile(ctx, &kvsv1.ReadFileRequest{LogicalPath: logicalPath})
 		if err != nil {
-			return nil, err
+			return nil, mapReadError(err)
 		}
 		return resp.GetContent(), nil
 	}
@@ -427,7 +427,7 @@ func (s *Store) ListDir(ctx context.Context, logicalDir string) ([]kvsapi.DirEnt
 	if client, err := s.forwardClient(); err == nil {
 		resp, err := client.ListDir(ctx, &kvsv1.ListDirRequest{LogicalDir: logicalDir})
 		if err != nil {
-			return nil, err
+			return nil, mapReadError(err)
 		}
 		entries := make([]kvsapi.DirEntry, 0, len(resp.GetEntries()))
 		for _, entry := range resp.GetEntries() {
@@ -442,12 +442,26 @@ func (s *Store) Stat(ctx context.Context, logicalPath string) (kvsapi.FileInfo, 
 	if client, err := s.forwardClient(); err == nil {
 		resp, err := client.Stat(ctx, &kvsv1.StatRequest{LogicalPath: logicalPath})
 		if err != nil {
-			return kvsapi.FileInfo{}, err
+			return kvsapi.FileInfo{}, mapReadError(err)
 		}
 		info := resp.GetInfo()
 		return kvsapi.FileInfo{Path: info.GetPath(), Size: info.GetSize(), VersionID: info.GetVersionId(), ModTime: info.GetModTime().AsTime()}, nil
 	}
 	return s.local.Stat(ctx, logicalPath)
+}
+
+// mapReadError normalizes errors from a forwarded read. A follower forwards
+// reads to the leader over gRPC; without this mapping a missing key would
+// surface as codes.NotFound instead of the os.ErrNotExist contract used by the
+// local store and by Guardian's history readers.
+func mapReadError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if status.Code(err) == codes.NotFound {
+		return os.ErrNotExist
+	}
+	return err
 }
 
 func (s *Store) Watch(ctx context.Context, prefixes []string) (<-chan kvsapi.ChangeEvent, error) {
@@ -657,7 +671,7 @@ func (s *Store) ListVersions(ctx context.Context, logicalPath string) ([]kvsapi.
 	if client, err := s.forwardClient(); err == nil {
 		resp, err := client.ListVersions(ctx, &kvsv1.ListVersionsRequest{LogicalPath: logicalPath})
 		if err != nil {
-			return nil, err
+			return nil, mapReadError(err)
 		}
 		versions := make([]kvsapi.FileVersion, 0, len(resp.GetVersions()))
 		for _, version := range resp.GetVersions() {
@@ -672,7 +686,7 @@ func (s *Store) GetVersion(ctx context.Context, logicalPath, versionID string) (
 	if client, err := s.forwardClient(); err == nil {
 		resp, err := client.GetVersion(ctx, &kvsv1.GetVersionRequest{LogicalPath: logicalPath, VersionId: versionID})
 		if err != nil {
-			return kvsapi.VersionedFile{}, err
+			return kvsapi.VersionedFile{}, mapReadError(err)
 		}
 		file := resp.GetFile()
 		return kvsapi.VersionedFile{Version: fileVersionFromProto(file.GetVersion()), Content: append([]byte(nil), file.GetContent()...)}, nil
