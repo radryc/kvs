@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,7 +20,9 @@ import (
 	"github.com/radryc/kvs/internal/store/local"
 	"github.com/radryc/kvs/pkg/kvsapi"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -75,6 +78,30 @@ type applyResult struct {
 	Error string               `json:"error,omitempty"`
 }
 
+// staticAddr preserves a configured hostname as the advertised raft address.
+// Hashicorp raft normally requires a *net.TCPAddr, which forces callers to
+// resolve DNS at startup. A custom StreamLayer lets us advertise the stable
+// service name instead and resolve peers at dial time.
+type staticAddr struct {
+	value string
+}
+
+func (a staticAddr) Network() string { return "tcp" }
+func (a staticAddr) String() string  { return a.value }
+
+type tcpStreamLayer struct {
+	listener  net.Listener
+	advertise net.Addr
+}
+
+func (s *tcpStreamLayer) Dial(address raft.ServerAddress, timeout time.Duration) (net.Conn, error) {
+	return net.DialTimeout("tcp", string(address), timeout)
+}
+
+func (s *tcpStreamLayer) Accept() (net.Conn, error) { return s.listener.Accept() }
+func (s *tcpStreamLayer) Close() error              { return s.listener.Close() }
+func (s *tcpStreamLayer) Addr() net.Addr            { return s.advertise }
+
 func Open(cfg Config) (*Store, error) {
 	if cfg.DataDir == "" {
 		return nil, fmt.Errorf("raftstore: data dir is required")
@@ -120,10 +147,7 @@ func Open(cfg Config) (*Store, error) {
 		if peer.NodeID != "" && peer.APIAddress != "" {
 			store.apiByNode[peer.NodeID] = peer.APIAddress
 		}
-		if peer.RaftAddress != "" {
-			store.nodeByRaft[raft.ServerAddress(peer.RaftAddress)] = peer.NodeID
-			store.apiByRaft[raft.ServerAddress(peer.RaftAddress)] = peer.APIAddress
-		}
+		store.registerRaftEndpoint(raft.ServerAddress(strings.TrimSpace(peer.RaftAddress)), peer.NodeID, peer.APIAddress)
 	}
 	if cfg.RaftAddress == "" {
 		return store, nil
@@ -133,19 +157,42 @@ func Open(cfg Config) (*Store, error) {
 		return nil, fmt.Errorf("raftstore: node id is required when raft is enabled")
 	}
 
-	localRaftAddress := cfg.RaftAddress
-	var advertiseAddr net.Addr
-	if strings.TrimSpace(cfg.RaftAdvertise) != "" {
-		tcpAddr, err := net.ResolveTCPAddr("tcp", strings.TrimSpace(cfg.RaftAdvertise))
-		if err != nil {
-			store.Close()
-			return nil, fmt.Errorf("raftstore: resolve advertise address: %w", err)
-		}
-		advertiseAddr = tcpAddr
-		localRaftAddress = tcpAddr.String()
+	listener, err := net.Listen("tcp", strings.TrimSpace(cfg.RaftAddress))
+	if err != nil {
+		localStore.Close()
+		return nil, fmt.Errorf("raftstore: listen on %s: %w", cfg.RaftAddress, err)
 	}
-	store.nodeByRaft[raft.ServerAddress(localRaftAddress)] = cfg.NodeID
-	store.apiByRaft[raft.ServerAddress(localRaftAddress)] = cfg.APIAddress
+
+	// Prefer the operator-configured advertised address. If none is set, use
+	// the actual listener address. Never resolve DNS here: a CoreDNS outage
+	// must not prevent a node from starting.
+	localRaftAddress := strings.TrimSpace(cfg.RaftAdvertise)
+	if localRaftAddress == "" {
+		localRaftAddress = listener.Addr().String()
+	}
+	if host, port, splitErr := net.SplitHostPort(localRaftAddress); splitErr == nil {
+		if host == "" || host == "0.0.0.0" || host == "::" || host == "[::]" {
+			if podIP := strings.TrimSpace(os.Getenv("POD_IP")); podIP != "" {
+				localRaftAddress = net.JoinHostPort(podIP, port)
+			} else {
+				_ = listener.Close()
+				localStore.Close()
+				return nil, fmt.Errorf(
+					"raftstore: advertised raft address %q is not routable; set --kvs-raft-advertise-addr or POD_IP",
+					localRaftAddress,
+				)
+			}
+		}
+	}
+	store.registerRaftEndpoint(raft.ServerAddress(localRaftAddress), cfg.NodeID, cfg.APIAddress)
+	store.registerRaftAliases(localRaftAddress, cfg.NodeID, cfg.APIAddress, cfg.Peers)
+
+	stream := &tcpStreamLayer{
+		listener:  listener,
+		advertise: staticAddr{value: localRaftAddress},
+	}
+	transport := raft.NewNetworkTransport(stream, 3, cfg.TransportTimeout, cfg.LogOutput)
+	store.transport = transport
 
 	raftDir := filepath.Join(cfg.DataDir, "raft")
 	if err := os.MkdirAll(raftDir, 0o755); err != nil {
@@ -168,13 +215,6 @@ func Open(cfg Config) (*Store, error) {
 		localStore.Close()
 		return nil, err
 	}
-	transport, err := raft.NewTCPTransport(cfg.RaftAddress, advertiseAddr, 3, cfg.TransportTimeout, cfg.LogOutput)
-	if err != nil {
-		localStore.Close()
-		return nil, err
-	}
-	store.transport = transport
-
 	raftCfg := raft.DefaultConfig()
 	raftCfg.LocalID = raft.ServerID(cfg.NodeID)
 	raftCfg.SnapshotInterval = 5 * time.Minute
@@ -218,6 +258,48 @@ func Open(cfg Config) (*Store, error) {
 	return store, nil
 }
 
+func (s *Store) registerRaftEndpoint(addr raft.ServerAddress, nodeID, api string) {
+	if addr == "" {
+		return
+	}
+	if nodeID != "" {
+		s.nodeByRaft[addr] = nodeID
+	}
+	if api != "" {
+		s.apiByRaft[addr] = api
+	}
+}
+
+func (s *Store) registerRaftAliases(localAddr, localNodeID, localAPI string, peers []Peer) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	s.registerResolvedAlias(ctx, localAddr, localNodeID, localAPI)
+	for _, peer := range peers {
+		s.registerResolvedAlias(ctx, peer.RaftAddress, peer.NodeID, peer.APIAddress)
+	}
+}
+
+// registerResolvedAlias records the IP form of a raft hostname so existing
+// snapshots/configuration that still contain IP addresses keep working. DNS
+// failures are intentionally ignored; the advertised name remains usable.
+func (s *Store) registerResolvedAlias(ctx context.Context, address, nodeID, api string) {
+	address = strings.TrimSpace(address)
+	if address == "" {
+		return
+	}
+	host, port, err := net.SplitHostPort(address)
+	if err != nil || host == "" || net.ParseIP(host) != nil {
+		return
+	}
+	ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	if err != nil {
+		return
+	}
+	for _, ip := range ips {
+		s.registerRaftEndpoint(raft.ServerAddress(net.JoinHostPort(ip.String(), port)), nodeID, api)
+	}
+}
+
 // StartPurge starts a background goroutine that periodically purges old blob
 // versions from the underlying local store.  It delegates to the embedded
 // local.Store and is a no-op when the raft node is a follower that forwards
@@ -231,6 +313,10 @@ func (s *Store) Close() error {
 	var closeErr error
 	if s.raft != nil {
 		if err := s.raft.Shutdown().Error(); err != nil {
+			closeErr = err
+		}
+	} else if s.transport != nil {
+		if err := s.transport.Close(); err != nil {
 			closeErr = err
 		}
 	}
@@ -275,6 +361,9 @@ func (s *Store) Status() kvsapi.StoreStatus {
 	role := strings.ToLower(state.String())
 	leaderAddr := s.raft.Leader()
 	leaderID := s.nodeByRaft[leaderAddr]
+	if leaderID == "" && leaderAddr != "" {
+		leaderID = s.leaderNodeIDByAddress(leaderAddr)
+	}
 	healthy := false
 	switch state {
 	case raft.Leader:
@@ -283,15 +372,44 @@ func (s *Store) Status() kvsapi.StoreStatus {
 		healthy = leaderAddr != ""
 	}
 
-	return kvsapi.StoreStatus{
-		Enabled:   true,
-		Healthy:   healthy,
-		Mode:      "raft",
-		Role:      role,
-		LeaderID:  leaderID,
-		PeerCount: peerCount,
-		KeyCount:  s.local.KeyCount(),
+	var term uint64
+	if raw := s.raft.Stats()["term"]; raw != "" {
+		term, _ = strconv.ParseUint(raw, 10, 64)
 	}
+	leaderTermGauge.Set(float64(term))
+	if state == raft.Leader {
+		isLeaderGauge.Set(1)
+	} else {
+		isLeaderGauge.Set(0)
+	}
+
+	return kvsapi.StoreStatus{
+		Enabled:       true,
+		Healthy:       healthy,
+		Mode:          "raft",
+		Role:          role,
+		LeaderID:      leaderID,
+		LeaderAddress: string(leaderAddr),
+		Term:          term,
+		PeerCount:     peerCount,
+		KeyCount:      s.local.KeyCount(),
+	}
+}
+
+func (s *Store) leaderNodeIDByAddress(address raft.ServerAddress) string {
+	if address == "" || s.raft == nil {
+		return ""
+	}
+	future := s.raft.GetConfiguration()
+	if err := future.Error(); err != nil {
+		return ""
+	}
+	for _, server := range future.Configuration().Servers {
+		if server.Address == address {
+			return string(server.ID)
+		}
+	}
+	return ""
 }
 
 func (s *Store) ReadFile(ctx context.Context, logicalPath string) ([]byte, error) {
@@ -340,34 +458,199 @@ func (s *Store) UpsertFiles(ctx context.Context, batch kvsapi.MutationBatch) (kv
 	if s.raft == nil {
 		return s.local.UpsertFiles(ctx, batch)
 	}
-	if client, err := s.forwardClient(); err == nil {
-		resp, err := client.UpsertFiles(ctx, protoUpsertBatch(batch))
-		if err != nil {
-			return kvsapi.BatchRevision{}, err
-		}
-		return batchRevisionFromProto(resp), nil
-	}
-	if err := s.local.ValidateUpsertBatch(ctx, batch); err != nil {
-		return kvsapi.BatchRevision{}, err
-	}
-	return s.applyCommand(commandEnvelope{Op: "upsert", MutationBatch: &batch})
+	return s.mutateWithLeader(ctx,
+		func() (kvsapi.BatchRevision, error) {
+			if err := s.local.ValidateUpsertBatch(ctx, batch); err != nil {
+				return kvsapi.BatchRevision{}, err
+			}
+			return s.applyCommand(commandEnvelope{Op: "upsert", MutationBatch: &batch})
+		},
+		func(client kvsv1.KVStoreClient) (kvsapi.BatchRevision, error) {
+			resp, err := client.UpsertFiles(ctx, protoUpsertBatch(batch))
+			if err != nil {
+				return kvsapi.BatchRevision{}, err
+			}
+			return batchRevisionFromProto(resp), nil
+		},
+	)
 }
 
 func (s *Store) DeletePaths(ctx context.Context, batch kvsapi.DeleteBatch) (kvsapi.BatchRevision, error) {
 	if s.raft == nil {
 		return s.local.DeletePaths(ctx, batch)
 	}
-	if client, err := s.forwardClient(); err == nil {
-		resp, err := client.DeletePaths(ctx, protoDeleteBatch(batch))
+	return s.mutateWithLeader(ctx,
+		func() (kvsapi.BatchRevision, error) {
+			if err := s.local.ValidateDeleteBatch(ctx, batch); err != nil {
+				return kvsapi.BatchRevision{}, err
+			}
+			return s.applyCommand(commandEnvelope{Op: "delete", DeleteBatch: &batch})
+		},
+		func(client kvsv1.KVStoreClient) (kvsapi.BatchRevision, error) {
+			resp, err := client.DeletePaths(ctx, protoDeleteBatch(batch))
+			if err != nil {
+				return kvsapi.BatchRevision{}, err
+			}
+			return batchRevisionFromProto(resp), nil
+		},
+	)
+}
+
+const maxLeaderAttempts = 6
+
+// mutateWithLeader commits a mutation exactly once. Followers always forward;
+// they never fall through to a local raft.Apply, which would surface a
+// misleading "not the leader" error and could apply against stale state. If
+// leadership moves between the role check and the apply, the mutation is
+// retried against the newly elected leader.
+func (s *Store) mutateWithLeader(
+	ctx context.Context,
+	local func() (kvsapi.BatchRevision, error),
+	forward func(kvsv1.KVStoreClient) (kvsapi.BatchRevision, error),
+) (kvsapi.BatchRevision, error) {
+	var lastErr error
+	for attempt := 0; attempt < maxLeaderAttempts; attempt++ {
+		if attempt > 0 {
+			writeRetryTotal.Inc()
+			if err := waitForRetry(ctx, attempt); err != nil {
+				return kvsapi.BatchRevision{}, err
+			}
+		}
+
+		client, isLocal, err := s.leaderClient()
 		if err != nil {
+			lastErr = err
+			notLeaderTotal.Inc()
+			continue
+		}
+		if isLocal {
+			revision, err := local()
+			if err == nil {
+				return revision, nil
+			}
+			lastErr = wrapNotLeader(err)
+			if !isNotLeaderError(err) {
+				return kvsapi.BatchRevision{}, err
+			}
+			notLeaderTotal.Inc()
+			continue
+		}
+
+		revision, err := forward(client)
+		if err == nil {
+			return revision, nil
+		}
+		lastErr = wrapNotLeader(err)
+		if !isNotLeaderError(err) && !isNotLeaderStatus(err) {
 			return kvsapi.BatchRevision{}, err
 		}
-		return batchRevisionFromProto(resp), nil
+		notLeaderTotal.Inc()
 	}
-	if err := s.local.ValidateDeleteBatch(ctx, batch); err != nil {
-		return kvsapi.BatchRevision{}, err
+	if lastErr == nil {
+		lastErr = fmt.Errorf("%w: no leader available", kvsapi.ErrLeaderUnknown)
 	}
-	return s.applyCommand(commandEnvelope{Op: "delete", DeleteBatch: &batch})
+	return kvsapi.BatchRevision{}, lastErr
+}
+
+func (s *Store) leaderClient() (kvsv1.KVStoreClient, bool, error) {
+	if s.raft == nil {
+		return nil, true, nil
+	}
+	if s.raft.State() == raft.Leader {
+		return nil, true, nil
+	}
+	endpoint, nodeID, err := s.leaderEndpoint()
+	if err != nil {
+		forwardFailureTotal.Inc()
+		return nil, false, err
+	}
+	client, err := s.clientFor(endpoint)
+	if err != nil {
+		return nil, false, fmt.Errorf(
+			"%w: dial leader %s (%s): %v",
+			kvsapi.ErrLeaderUnknown, nodeID, endpoint, err,
+		)
+	}
+	return client, false, nil
+}
+
+func (s *Store) leaderEndpoint() (string, string, error) {
+	if s.raft == nil {
+		return "", "", nil
+	}
+	leaderAddr := s.raft.Leader()
+	if leaderAddr == "" {
+		return "", "", fmt.Errorf("%w: no leader elected", kvsapi.ErrLeaderUnknown)
+	}
+	nodeID := s.nodeByRaft[leaderAddr]
+	endpoint := s.apiByRaft[leaderAddr]
+	if endpoint == "" && nodeID != "" {
+		endpoint = s.apiByNode[nodeID]
+	}
+	if endpoint == "" {
+		nodeID = s.leaderNodeIDByAddress(leaderAddr)
+		if nodeID != "" {
+			endpoint = s.apiByNode[nodeID]
+		}
+	}
+	if endpoint == "" {
+		return "", nodeID, fmt.Errorf(
+			"%w: leader %s has no API endpoint",
+			kvsapi.ErrLeaderUnknown, leaderAddr,
+		)
+	}
+	return endpoint, nodeID, nil
+}
+
+func waitForRetry(ctx context.Context, attempt int) error {
+	delay := 100 * time.Millisecond
+	for i := 1; i < attempt && delay < 800*time.Millisecond; i++ {
+		delay *= 2
+	}
+	if delay > 800*time.Millisecond {
+		delay = 800 * time.Millisecond
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func isNotLeaderError(err error) bool {
+	return errors.Is(err, raft.ErrNotLeader) ||
+		errors.Is(err, raft.ErrLeadershipLost) ||
+		errors.Is(err, raft.ErrLeadershipTransferInProgress) ||
+		errors.Is(err, kvsapi.ErrNotLeader) ||
+		errors.Is(err, kvsapi.ErrLeaderUnknown)
+}
+
+func wrapNotLeader(err error) error {
+	if err == nil {
+		return nil
+	}
+	if _, ok := status.FromError(err); ok {
+		return err
+	}
+	if errors.Is(err, kvsapi.ErrNotLeader) || errors.Is(err, kvsapi.ErrLeaderUnknown) {
+		return err
+	}
+	return fmt.Errorf("%w: %v", kvsapi.ErrNotLeader, err)
+}
+
+func isNotLeaderStatus(err error) bool {
+	switch status.Code(err) {
+	case codes.Aborted, codes.Unavailable:
+		return true
+	case codes.Internal:
+		// Rolling upgrades may still be talking to an older node that wraps
+		// raft.ErrNotLeader in codes.Internal.
+		return strings.Contains(err.Error(), "not the leader")
+	}
+	return false
 }
 
 func (s *Store) ListVersions(ctx context.Context, logicalPath string) ([]kvsapi.FileVersion, error) {
@@ -417,23 +700,14 @@ func (s *Store) applyCommand(command commandEnvelope) (kvsapi.BatchRevision, err
 }
 
 func (s *Store) forwardClient() (kvsv1.KVStoreClient, error) {
-	if s.raft == nil || s.raft.State() == raft.Leader {
+	client, isLocal, err := s.leaderClient()
+	if err != nil {
+		return nil, err
+	}
+	if isLocal {
 		return nil, raft.ErrNotLeader
 	}
-	leaderAddr := s.raft.Leader()
-	if leaderAddr == "" {
-		return nil, raft.ErrNotLeader
-	}
-	endpoint := s.apiByRaft[leaderAddr]
-	if endpoint == "" {
-		if nodeID := s.nodeByRaft[leaderAddr]; nodeID != "" {
-			endpoint = s.apiByNode[nodeID]
-		}
-	}
-	if endpoint == "" {
-		return nil, fmt.Errorf("raftstore: leader endpoint unavailable for %s", leaderAddr)
-	}
-	return s.clientFor(endpoint)
+	return client, nil
 }
 
 func (s *Store) clientFor(endpoint string) (kvsv1.KVStoreClient, error) {

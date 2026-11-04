@@ -9,6 +9,7 @@ import (
 
 	kvsv1 "github.com/radryc/kvs/api/proto/kvs/v1"
 	"github.com/radryc/kvs/internal/store/local"
+	"github.com/radryc/kvs/pkg/kvsapi"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -193,4 +194,13 @@ func newTestClient(t *testing.T) (kvsv1.KVStoreClient, func()) {
 	}
 
 	return kvsv1.NewKVStoreClient(conn), cleanup
+}
+
+func TestToStatusMapsRetryableLeaderErrors(t *testing.T) {
+	if got := status.Code(toStatus(kvsapi.ErrNotLeader)); got != codes.Aborted {
+		t.Fatalf("ErrNotLeader code = %s, want Aborted", got)
+	}
+	if got := status.Code(toStatus(kvsapi.ErrLeaderUnknown)); got != codes.Unavailable {
+		t.Fatalf("ErrLeaderUnknown code = %s, want Unavailable", got)
+	}
 }
