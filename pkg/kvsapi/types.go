@@ -91,6 +91,11 @@ type ChangeEvent struct {
 	CommittedAt     time.Time  `json:"committedAt"`
 }
 
+// ExpectedVersionAbsent is the sentinel ExpectedVersionID meaning "the path
+// must not currently exist, or must only hold a tombstone". It is used for
+// create-if-not-exists CAS semantics.
+const ExpectedVersionAbsent = "absent"
+
 type MutationBatch struct {
 	Writes  []PathWrite     `json:"writes"`
 	Context MutationContext `json:"context"`
