@@ -2,7 +2,15 @@
 
 ## Status
 
-Proposed architecture.
+Implemented core architecture with a scale-out design target.
+
+The repository implements the versioned, Raft-replicated key-value store described here:
+version chains, optimistic concurrency, batch revisions, hot/archive tiers, prefix
+watching, snapshots, and leader forwarding over a gRPC `KVStore` API. The
+distributed sharding, placement, and repair sections describe the target design
+for scale-out and are not all implemented yet. The
+[implementation status](#implementation-status) table at the end of this
+document is authoritative for what ships today.
 
 This document describes a distributed key-value store that can back Guardian partitions and intents while also handling a much larger generic object workload than the current MonoFS-facing path model.
 
@@ -283,11 +291,19 @@ This is necessary for:
 
 ### Latest read
 
-1. Router resolves the shard.
-2. A linearizable read goes to the leader, or a lease-valid follower if enabled later.
-3. Metadata lookup returns the latest `VersionManifest`.
-4. If `storage_class=hot`, the replica streams the blob from local segments.
-5. If `storage_class=archive`, the node fetches from archive storage or redirects through an archive reader.
+1. If the local node is the Raft leader, the read is served from the local store.
+2. If it is a follower, the request is forwarded to the current leader over the
+   gRPC API. Forwarded `NotFound` results are normalized so a follower does not
+   report a transient miss.
+3. Metadata lookup returns the latest version manifest.
+4. If `storage_class=hot`, the blob is read from local segments.
+5. If `storage_class=archive`, the blob is read from local archive storage or,
+   when a fetcher offloader is configured, fetched from the MonoFS fetcher tier.
+
+Writes follow the same rule: any node accepts the request, but only the leader
+commits it to the Raft log. Startup advertises a stable service name and
+resolves peers at dial time, so a node does not need DNS for its peers before it
+can start.
 
 ### Historical read
 
@@ -534,44 +550,41 @@ These jobs must be rate-limited so they do not starve foreground traffic.
 - purge pauses once it can no longer verify archive copies
 - archived-version restores may be temporarily unavailable
 
-## Recommended Implementation Phases
+## Implementation status
 
-### Phase 1
+The single-group core is implemented. Scale-out placement and repair remain
+target design work.
 
-- implement single shard-group prototype with 3 nodes
-- support `PutStream`, `GetStream`, version chains, and tombstones
-- implement Guardian adapter for partitions and intents only
-- use MinIO as the archive backend
+| Capability | Status | Where |
+|---|---|---|
+| Raft-replicated file batches | Implemented | `pkg/raftstore/store.go` |
+| Version chains and historical reads | Implemented | `internal/store/local/store.go` (`ListVersions`, `GetVersion`) |
+| Optimistic concurrency (`ExpectedVersionID`) and batch revisions | Implemented | `pkg/raftstore`, `pkg/kvsapi` |
+| Prefix listing and directory semantics | Implemented | `internal/store/local/store.go` |
+| Prefix watch subscriptions | Implemented | `Store.Watch` in both tiers |
+| Hot/archive tiering and purge | Implemented | `MaxHotVersions`, `MaxArchivedVersions`, `Offloader` |
+| Offload archived blobs to MonoFS fetcher | Implemented (optional) | `kvsapi.FetcherOffloader` |
+| Snapshots and restore | Implemented | `Store.Snapshot`, `Store.Restore` |
+| gRPC API and streaming reads/writes | Implemented | `api/proto/kvs/v1`, `internal/service/grpcapi` |
+| Leader forwarding for writes and reads | Implemented | `mutateWithLeader`, `leaderClient` |
+| Prometheus metrics | Implemented | `internal/store/local/metrics.go`, `pkg/raftstore/metrics.go` |
+| Virtual shards, placement, rebalancing | Not implemented | target design |
+| Object-store archive backend (S3/MinIO) | Not implemented; local archive plus optional fetcher offload | target design |
+| Anti-entropy repair and peer recovery | Not implemented | target design |
+| Follower lease reads | Not implemented | target design |
+| Quotas and multi-tenant isolation | Not implemented | target design |
 
-### Phase 2
+## Final recommendation
 
-- add virtual shards and placement rebalancing
-- add watch aggregation
-- add queue namespace support
-- add purge, archive, and blob GC workers
+The backend is built as a versioned, blob-oriented KV:
 
-### Phase 3
+- Raft-committed mutations with explicit version chains
+- hot blobs with archive tiering and optional fetcher offload
+- Guardian-compatible path mapping and batch revision support
+- leader forwarding so any node can accept a request
 
-- add repair tooling and snapshot streaming
-- add throttling, quotas, and tenant isolation
-- add follower lease reads and performance tuning
-
-## Final Recommendation
-
-Do not evolve `ssdc` directly into this backend.
-
-Use it only as conceptual inspiration for:
-
-- local WAL durability before flush
-- delayed repair after outages
-- durable buffering of replication work
-
-Build the actual backend as a new distributed, shard-aware, versioned blob KV with:
-
-- Raft-committed metadata per shard group
-- append-only blob segments for large values
-- explicit version chains
-- archive pointers for cold history
+Scale-out work should add virtual shard groups and placement on top of the
+current Raft group rather than replacing the versioning and tiering layers.
 - Guardian-specific path mapping and batch revision support
 
 That architecture matches the size target, the retention model, restart persistence, and the Guardian partitions and intents workflow much more closely than the current `ssdc` design.
