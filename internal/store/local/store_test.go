@@ -3,9 +3,12 @@ package local
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -353,4 +356,153 @@ func assertEvent(t *testing.T, ch <-chan kvsapi.ChangeEvent, expected kvsapi.Cha
 
 func osStat(path string) (fs.FileInfo, error) {
 	return fs.Stat(os.DirFS(filepath.Dir(path)), filepath.Base(path))
+}
+
+func TestExpectedVersionAbsentCreateAndConflict(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t, 2)
+	defer store.Close()
+
+	path := "/partitions/demo/intents/absent.yaml"
+
+	resp, err := store.UpsertFiles(ctx, kvsapi.MutationBatch{
+		Writes: []kvsapi.PathWrite{{
+			LogicalPath:       path,
+			Content:           []byte("created"),
+			ExpectedVersionID: kvsapi.ExpectedVersionAbsent,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("absent create: %v", err)
+	}
+	if got := versionForPath(t, resp, path); got == "" {
+		t.Fatal("expected version id for absent create")
+	}
+
+	if _, err := store.UpsertFiles(ctx, kvsapi.MutationBatch{
+		Writes: []kvsapi.PathWrite{{
+			LogicalPath:       path,
+			Content:           []byte("overwrite"),
+			ExpectedVersionID: kvsapi.ExpectedVersionAbsent,
+		}},
+	}); !errors.Is(err, kvsapi.ErrConflict) {
+		t.Fatalf("expected conflict on second absent create, got %v", err)
+	}
+
+	content, err := store.ReadFile(ctx, path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(content) != "created" {
+		t.Fatalf("content = %q, want created", string(content))
+	}
+}
+
+func TestExpectedVersionAbsentAfterTombstone(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t, 2)
+	defer store.Close()
+
+	path := "/partitions/demo/intents/tombstone.yaml"
+	resp, err := store.UpsertFiles(ctx, kvsapi.MutationBatch{
+		Writes: []kvsapi.PathWrite{{LogicalPath: path, Content: []byte("v1")}},
+	})
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	versionID := versionForPath(t, resp, path)
+	if _, err := store.DeletePaths(ctx, kvsapi.DeleteBatch{
+		Deletes: []kvsapi.PathDelete{{LogicalPath: path, ExpectedVersionID: versionID}},
+	}); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	if _, err := store.UpsertFiles(ctx, kvsapi.MutationBatch{
+		Writes: []kvsapi.PathWrite{{
+			LogicalPath:       path,
+			Content:           []byte("recreated"),
+			ExpectedVersionID: kvsapi.ExpectedVersionAbsent,
+		}},
+	}); err != nil {
+		t.Fatalf("absent create after tombstone: %v", err)
+	}
+	content, err := store.ReadFile(ctx, path)
+	if err != nil {
+		t.Fatalf("read recreated: %v", err)
+	}
+	if string(content) != "recreated" {
+		t.Fatalf("content = %q, want recreated", string(content))
+	}
+}
+
+func TestExpectedVersionAbsentConcurrentCreate(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t, 2)
+	defer store.Close()
+
+	path := "/partitions/demo/intents/race.yaml"
+	const writers = 8
+	var wg sync.WaitGroup
+	var successes atomic.Int32
+	var conflicts atomic.Int32
+	start := make(chan struct{})
+
+	for i := 0; i < writers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			_, err := store.UpsertFiles(ctx, kvsapi.MutationBatch{
+				Writes: []kvsapi.PathWrite{{
+					LogicalPath:       path,
+					Content:           []byte(fmt.Sprintf("writer-%d", i)),
+					ExpectedVersionID: kvsapi.ExpectedVersionAbsent,
+				}},
+			})
+			switch {
+			case err == nil:
+				successes.Add(1)
+			case errors.Is(err, kvsapi.ErrConflict):
+				conflicts.Add(1)
+			default:
+				t.Errorf("unexpected error: %v", err)
+			}
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+
+	if successes.Load() != 1 {
+		t.Fatalf("successes = %d, want 1", successes.Load())
+	}
+	if conflicts.Load() != writers-1 {
+		t.Fatalf("conflicts = %d, want %d", conflicts.Load(), writers-1)
+	}
+}
+
+func TestDeleteExpectedVersionAbsent(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t, 2)
+	defer store.Close()
+
+	path := "/partitions/demo/intents/delete-absent.yaml"
+
+	// Deleting an absent path with "absent" is a no-op success.
+	if _, err := store.DeletePaths(ctx, kvsapi.DeleteBatch{
+		Deletes: []kvsapi.PathDelete{{LogicalPath: path, ExpectedVersionID: kvsapi.ExpectedVersionAbsent}},
+	}); err != nil {
+		t.Fatalf("absent delete of missing path: %v", err)
+	}
+
+	if _, err := store.UpsertFiles(ctx, kvsapi.MutationBatch{
+		Writes: []kvsapi.PathWrite{{LogicalPath: path, Content: []byte("present")}},
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if _, err := store.DeletePaths(ctx, kvsapi.DeleteBatch{
+		Deletes: []kvsapi.PathDelete{{LogicalPath: path, ExpectedVersionID: kvsapi.ExpectedVersionAbsent}},
+	}); !errors.Is(err, kvsapi.ErrConflict) {
+		t.Fatalf("expected conflict deleting present path with absent, got %v", err)
+	}
 }

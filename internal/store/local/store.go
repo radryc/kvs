@@ -1044,13 +1044,20 @@ func (s *Store) archiveBlobPath(versionID string) string {
 }
 
 func validateExpectedVersion(latest *versionManifest, expectedVersionID string) error {
-	if expectedVersionID == "" {
+	switch expectedVersionID {
+	case "":
+		return nil
+	case kvsapi.ExpectedVersionAbsent:
+		if latest != nil && !latest.Version.Tombstone {
+			return kvsapi.ErrConflict
+		}
+		return nil
+	default:
+		if latest == nil || latest.Version.VersionID != expectedVersionID {
+			return kvsapi.ErrConflict
+		}
 		return nil
 	}
-	if latest == nil || latest.Version.VersionID != expectedVersionID {
-		return kvsapi.ErrConflict
-	}
-	return nil
 }
 
 func encodeManifest(manifest versionManifest) ([]byte, error) {
