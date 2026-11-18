@@ -3,7 +3,10 @@ package grpcapi
 import (
 	"context"
 	"errors"
+	"io"
+	"log/slog"
 	"net"
+	"strings"
 	"testing"
 
 	kvsv1 "github.com/radryc/kvs/api/proto/kvs/v1"
@@ -24,6 +27,9 @@ func authContext(ctx context.Context, token string) context.Context {
 // returns a client. The cleanup closes everything.
 func newAuthTestClient(t *testing.T, cfg Config) (kvsv1.KVStoreClient, func()) {
 	t.Helper()
+	if cfg.AuditLogger == nil && strings.TrimSpace(cfg.AuditLogPath) == "" {
+		cfg.AuditLogger = slog.New(slog.NewJSONHandler(io.Discard, nil))
+	}
 	listener := bufconn.Listen(bufSize)
 	baseStore, err := local.Open(local.Config{DataDir: t.TempDir(), MaxHotVersions: 2})
 	if err != nil {
@@ -49,6 +55,7 @@ func newAuthTestClient(t *testing.T, cfg Config) (kvsv1.KVStoreClient, func()) {
 	)
 	if err != nil {
 		grpcServer.Stop()
+		_ = server.Close()
 		_ = baseStore.Close()
 		_ = listener.Close()
 		t.Fatalf("dial bufconn: %v", err)
@@ -57,6 +64,7 @@ func newAuthTestClient(t *testing.T, cfg Config) (kvsv1.KVStoreClient, func()) {
 	cleanup := func() {
 		_ = conn.Close()
 		grpcServer.Stop()
+		_ = server.Close()
 		_ = baseStore.Close()
 		_ = listener.Close()
 	}
@@ -79,6 +87,7 @@ func TestNewServerWithAuthRequiresToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewServerWithAuth with %s: %v", AuthTokenEnv, err)
 	}
+	defer server.Close()
 	if server.authToken != "env-token" {
 		t.Fatalf("auth token = %q, want env-token", server.authToken)
 	}

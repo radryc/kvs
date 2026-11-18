@@ -1,6 +1,8 @@
 package grpcserver
 
 import (
+	"log/slog"
+
 	kvsv1 "github.com/radryc/kvs/api/proto/kvs/v1"
 	grpcapi "github.com/radryc/kvs/internal/service/grpcapi"
 	"github.com/radryc/kvs/pkg/kvsapi"
@@ -12,12 +14,19 @@ type Config struct {
 	// AuthToken is the bearer token required by NewWithAuth. When empty,
 	// NewWithAuth falls back to KVS_AUTH_TOKEN.
 	AuthToken string
+	// AuditLogPath enables a JSONL audit trail. When empty, KVS_AUDIT_LOG is
+	// consulted, otherwise audit records are written to stderr as JSON.
+	AuditLogPath string
+	// AuditLogger overrides the audit destination (tests and embedding).
+	AuditLogger *slog.Logger
 }
 
 func apiConfig(cfg Config) grpcapi.Config {
 	return grpcapi.Config{
-		ChunkSize: cfg.ChunkSize,
-		AuthToken: cfg.AuthToken,
+		ChunkSize:    cfg.ChunkSize,
+		AuthToken:    cfg.AuthToken,
+		AuditLogPath: cfg.AuditLogPath,
+		AuditLogger:  cfg.AuditLogger,
 	}
 }
 

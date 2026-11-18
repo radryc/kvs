@@ -3,6 +3,8 @@ package grpcapi
 import (
 	"bytes"
 	"context"
+	"io"
+	"log/slog"
 	"net"
 	"testing"
 	"time"
@@ -170,7 +172,11 @@ func newTestClient(t *testing.T) (kvsv1.KVStoreClient, func()) {
 	}
 
 	grpcServer := grpc.NewServer()
-	kvsv1.RegisterKVStoreServer(grpcServer, NewServer(baseStore, Config{ChunkSize: 4}))
+	srv := NewServer(baseStore, Config{
+		ChunkSize:   4,
+		AuditLogger: slog.New(slog.NewJSONHandler(io.Discard, nil)),
+	})
+	kvsv1.RegisterKVStoreServer(grpcServer, srv)
 	go func() {
 		_ = grpcServer.Serve(listener)
 	}()
@@ -189,6 +195,7 @@ func newTestClient(t *testing.T) (kvsv1.KVStoreClient, func()) {
 	cleanup := func() {
 		_ = conn.Close()
 		grpcServer.Stop()
+		_ = srv.Close()
 		_ = baseStore.Close()
 		_ = listener.Close()
 	}
