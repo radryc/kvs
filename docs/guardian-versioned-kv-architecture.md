@@ -585,6 +585,5 @@ The backend is built as a versioned, blob-oriented KV:
 
 Scale-out work should add virtual shard groups and placement on top of the
 current Raft group rather than replacing the versioning and tiering layers.
-- Guardian-specific path mapping and batch revision support
 
 That architecture matches the size target, the retention model, restart persistence, and the Guardian partitions and intents workflow much more closely than the current `ssdc` design.
