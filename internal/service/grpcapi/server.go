@@ -3,36 +3,164 @@ package grpcapi
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"errors"
 	"io"
 	"io/fs"
+	"os"
 	"strings"
 
 	kvsv1 "github.com/radryc/kvs/api/proto/kvs/v1"
 	"github.com/radryc/kvs/pkg/kvsapi"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const defaultChunkSize = 64 * 1024
 
+// AuthTokenEnv is the environment variable consulted by NewServerWithAuth when
+// Config.AuthToken is empty.
+const AuthTokenEnv = "KVS_AUTH_TOKEN"
+
+// ErrAuthTokenRequired is returned when the authenticated constructor is used
+// without a bearer token configured.
+var ErrAuthTokenRequired = errors.New("grpcapi: auth token is required (set Config.AuthToken or KVS_AUTH_TOKEN)")
+
 type Config struct {
 	ChunkSize int
+	// AuthToken is the bearer token required on every RPC. NewServerWithAuth
+	// falls back to KVS_AUTH_TOKEN when this is empty.
+	AuthToken string
 }
 
 type Server struct {
 	kvsv1.UnimplementedKVStoreServer
 	store     kvsapi.Store
 	chunkSize int
+	authToken string
 }
 
+// NewServer builds an unauthenticated server. It is intended for tests and
+// embedded callers that provide their own authorization layer. Production
+// entry points should use NewServerWithAuth.
 func NewServer(store kvsapi.Store, cfg Config) *Server {
+	server, err := newServer(store, cfg)
+	if err != nil {
+		panic("grpcapi: NewServer: " + err.Error())
+	}
+	return server
+}
+
+// NewServerWithAuth builds a server that requires a bearer token on every RPC
+// (health checks excepted). The token is taken from Config.AuthToken, falling
+// back to KVS_AUTH_TOKEN. Callers must attach UnaryInterceptor and
+// StreamInterceptor to their gRPC server.
+func NewServerWithAuth(store kvsapi.Store, cfg Config) (*Server, error) {
+	token := strings.TrimSpace(cfg.AuthToken)
+	if token == "" {
+		token = strings.TrimSpace(os.Getenv(AuthTokenEnv))
+	}
+	if token == "" {
+		return nil, ErrAuthTokenRequired
+	}
+	cfg.AuthToken = token
+	server, err := newServer(store, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return server, nil
+}
+
+func newServer(store kvsapi.Store, cfg Config) (*Server, error) {
 	if cfg.ChunkSize <= 0 {
 		cfg.ChunkSize = defaultChunkSize
 	}
-	return &Server{store: store, chunkSize: cfg.ChunkSize}
+	return &Server{
+		store:     store,
+		chunkSize: cfg.ChunkSize,
+		authToken: strings.TrimSpace(cfg.AuthToken),
+	}, nil
 }
+
+// UnaryInterceptor returns the bearer-token interceptor for s. It is a no-op
+// when no token is configured (for example, a server created with NewServer).
+func (s *Server) UnaryInterceptor() grpc.UnaryServerInterceptor {
+	return UnaryAuthInterceptor(s.authToken)
+}
+
+// StreamInterceptor returns the streaming bearer-token interceptor for s.
+func (s *Server) StreamInterceptor() grpc.StreamServerInterceptor {
+	return StreamAuthInterceptor(s.authToken)
+}
+
+// UnaryAuthInterceptor enforces bearer-token authentication using a
+// constant-time comparison. An empty token disables enforcement.
+func UnaryAuthInterceptor(authToken string) grpc.UnaryServerInterceptor {
+	expected := strings.TrimSpace(authToken)
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		principal, err := authenticate(ctx, info.FullMethod, expected)
+		if err != nil {
+			return nil, err
+		}
+		return handler(withPrincipal(ctx, principal), req)
+	}
+}
+
+// StreamAuthInterceptor is the streaming equivalent of UnaryAuthInterceptor.
+func StreamAuthInterceptor(authToken string) grpc.StreamServerInterceptor {
+	expected := strings.TrimSpace(authToken)
+	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		principal, err := authenticate(stream.Context(), info.FullMethod, expected)
+		if err != nil {
+			return err
+		}
+		return handler(srv, &authenticatedStream{ServerStream: stream, ctx: withPrincipal(stream.Context(), principal)})
+	}
+}
+
+func authenticate(ctx context.Context, fullMethod, expected string) (string, error) {
+	if expected == "" || isHealthMethod(fullMethod) {
+		return PrincipalFromContext(ctx), nil
+	}
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return "", status.Error(codes.Unauthenticated, "missing bearer token")
+	}
+	for _, value := range md.Get("authorization") {
+		scheme, token, found := strings.Cut(strings.TrimSpace(value), " ")
+		if !found || !strings.EqualFold(scheme, "Bearer") {
+			continue
+		}
+		if constantTimeTokenEqual(strings.TrimSpace(token), expected) {
+			return principalForToken(expected), nil
+		}
+	}
+	return "", status.Error(codes.Unauthenticated, "invalid or missing bearer token")
+}
+
+// constantTimeTokenEqual compares tokens by comparing fixed-size digests, so
+// neither the contents nor the length of the configured token leak through
+// timing.
+func constantTimeTokenEqual(got, expected string) bool {
+	gotDigest := sha256.Sum256([]byte(got))
+	expectedDigest := sha256.Sum256([]byte(expected))
+	return subtle.ConstantTimeCompare(gotDigest[:], expectedDigest[:]) == 1
+}
+
+func isHealthMethod(fullMethod string) bool {
+	return strings.HasPrefix(fullMethod, "/grpc.health.v1.Health/")
+}
+
+type authenticatedStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (s *authenticatedStream) Context() context.Context { return s.ctx }
 
 func (s *Server) ReadFile(ctx context.Context, req *kvsv1.ReadFileRequest) (*kvsv1.ReadFileResponse, error) {
 	logicalPath := strings.TrimSpace(req.GetLogicalPath())
