@@ -78,6 +78,7 @@ func startTestCluster(t *testing.T, count int) ([]*testClusterNode, func()) {
 			Bootstrap:      index == 0,
 			MaxHotVersions: 2,
 			LogOutput:      io.Discard,
+			ForwardTLS:     ForwardTLSConfig{AllowPlaintext: true},
 		})
 		if err != nil {
 			t.Fatalf("open %s: %v", peer.NodeID, err)
@@ -131,6 +132,7 @@ func TestOpenDoesNotRequireDNSForAdvertisedAddress(t *testing.T) {
 		APIAddress:    "127.0.0.1:19000",
 		Bootstrap:     true,
 		LogOutput:     io.Discard,
+		ForwardTLS:    ForwardTLSConfig{AllowPlaintext: true},
 	})
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
