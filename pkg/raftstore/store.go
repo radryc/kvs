@@ -862,7 +862,23 @@ func (s *Store) clientFor(endpoint string) (kvsv1.KVStoreClient, error) {
 // buildForwardCredentials returns TLS credentials for the forwarded gRPC
 // client, or nil when plaintext was explicitly allowed. Plaintext is denied
 // by default.
+//
+// STRATA_TLS_* takes precedence over KVS_FORWARD_TLS_*: when the shared mode is
+// optional or required, the shared client configuration is used (with
+// certificate verification always enabled) and the legacy plaintext opt-in is
+// ignored.
 func buildForwardCredentials(cfg ForwardTLSConfig) (credentials.TransportCredentials, error) {
+	envCfg, err := tlsx.LoadEnv()
+	if err != nil {
+		return nil, err
+	}
+	if envCfg.Mode != tlsx.ModeOff {
+		creds, err := tlsx.ClientCredentials(envCfg.ClientConfig())
+		if err != nil {
+			return nil, fmt.Errorf("raftstore: strata tls forward client: %w", err)
+		}
+		return creds, nil
+	}
 	if plaintextForwardAllowed(cfg) {
 		return nil, nil
 	}

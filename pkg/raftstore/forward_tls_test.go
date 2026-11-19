@@ -32,6 +32,14 @@ func clearForwardEnv(t *testing.T) {
 		forwardTLSServerNameEnv,
 		forwardTLSInsecureEnv,
 		ForwardAuthTokenEnv,
+		"STRATA_TLS_MODE",
+		"STRATA_TLS_CERT_FILE",
+		"STRATA_TLS_KEY_FILE",
+		"STRATA_TLS_CA_FILE",
+		"STRATA_TLS_SERVER_NAME",
+		"STRATA_TLS_REQUIRE_CLIENT_CERT",
+		"STRATA_TLS_ALLOWED_SPIFFE_IDS",
+		"STRATA_TLS_EXPECTED_SPIFFE_IDS",
 	} {
 		t.Setenv(key, "")
 	}
@@ -164,6 +172,32 @@ func TestBuildForwardCredentialsPlaintextRequiresOptIn(t *testing.T) {
 	}
 	if creds != nil {
 		t.Fatal("environment plaintext opt-in should return nil credentials")
+	}
+}
+
+func TestBuildForwardCredentialsPrefersStrataTLS(t *testing.T) {
+	clearForwardEnv(t)
+	bundle := generateRaftBundle(t)
+	identity := bundle.Services["kvs"]
+
+	t.Setenv("STRATA_TLS_MODE", "required")
+	t.Setenv("STRATA_TLS_CERT_FILE", identity.CertFile)
+	t.Setenv("STRATA_TLS_KEY_FILE", identity.KeyFile)
+	t.Setenv("STRATA_TLS_CA_FILE", bundle.CAFile)
+	t.Setenv("STRATA_TLS_SERVER_NAME", "localhost")
+	t.Setenv("STRATA_TLS_REQUIRE_CLIENT_CERT", "false")
+	// The legacy plaintext opt-in must not override the shared contract.
+	t.Setenv(forwardTLSAllowPlaintextEnv, "true")
+
+	creds, err := buildForwardCredentials(ForwardTLSConfig{AllowPlaintext: true})
+	if err != nil {
+		t.Fatalf("buildForwardCredentials: %v", err)
+	}
+	if creds == nil {
+		t.Fatal("STRATA_TLS_* must win over KVS_FORWARD_TLS_ALLOW_PLAINTEXT")
+	}
+	if got := creds.Info().SecurityProtocol; got != "tls" {
+		t.Fatalf("security protocol = %q, want tls", got)
 	}
 }
 
