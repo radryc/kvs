@@ -7,6 +7,7 @@ require (
 	github.com/hashicorp/raft v1.7.3
 	github.com/hashicorp/raft-boltdb/v2 v2.3.1
 	github.com/prometheus/client_golang v1.15.0
+	github.com/radryc/tlsx v0.0.0-00010101000000-000000000000
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.11
 )
@@ -50,3 +51,5 @@ require (
 	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
 )
+
+replace github.com/radryc/tlsx => ../tlsx

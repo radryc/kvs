@@ -56,6 +56,35 @@ func NewWithAuth(store kvsapi.Store, cfg Config) (kvsv1.KVStoreServer, []grpc.Se
 	return server, options, nil
 }
 
+// TLSOptions returns the gRPC server options that serve TLS or mTLS from the
+// shared STRATA_TLS_* contract. It returns no options when STRATA_TLS_MODE is
+// off, so plaintext remains the default.
+//
+//	opts, err := grpcserver.TLSOptions()
+//	srv := grpc.NewServer(append(authOpts, opts...)...)
+func TLSOptions() ([]grpc.ServerOption, error) {
+	return grpcapi.TLSOptions()
+}
+
+// NewWithAuthAndTLS returns a KVStore service protected by the bearer-token
+// interceptors and the gRPC server options that enforce them, plus TLS/mTLS
+// transport options derived from STRATA_TLS_* (none when the mode is off):
+//
+//	service, opts, err := grpcserver.NewWithAuthAndTLS(store, cfg)
+//	srv := grpc.NewServer(opts...)
+//	kvsv1.RegisterKVStoreServer(srv, service)
+func NewWithAuthAndTLS(store kvsapi.Store, cfg Config) (kvsv1.KVStoreServer, []grpc.ServerOption, error) {
+	server, options, err := NewWithAuth(store, cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	tlsOptions, err := grpcapi.TLSOptions()
+	if err != nil {
+		return nil, nil, err
+	}
+	return server, append(options, tlsOptions...), nil
+}
+
 // Register installs an unauthenticated KVStore service. Use NewWithAuth and a
 // grpc.NewServer configured with its options when authentication is required.
 func Register(server grpc.ServiceRegistrar, store kvsapi.Store, cfg Config) {
