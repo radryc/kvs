@@ -21,6 +21,7 @@ import (
 	kvsv1 "github.com/radryc/kvs/api/proto/kvs/v1"
 	"github.com/radryc/kvs/internal/store/local"
 	"github.com/radryc/kvs/pkg/kvsapi"
+	"github.com/radryc/tlsx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -55,6 +56,10 @@ type Config struct {
 	LogOutput        io.Writer
 	Offloader        kvsapi.FetcherOffloader // optional; routes archived blobs to fetcher
 	ForwardTLS       ForwardTLSConfig
+	// RaftTLS overrides the STRATA_TLS_* environment for the raft peer
+	// transport. When nil (the recommended setting) the environment is read at
+	// Open time. Mode=off keeps the peer transport in plaintext.
+	RaftTLS *tlsx.EnvConfig
 	// ForwardAuthToken is the bearer token sent to the Raft leader on
 	// forwarded RPCs. When empty, KVS_FORWARD_AUTH_TOKEN is consulted.
 	ForwardAuthToken string
@@ -129,10 +134,21 @@ func (a staticAddr) String() string  { return a.value }
 type tcpStreamLayer struct {
 	listener  net.Listener
 	advertise net.Addr
+	// clientTLS dials peers over TLS when non-nil.
+	clientTLS *tls.Config
 }
 
 func (s *tcpStreamLayer) Dial(address raft.ServerAddress, timeout time.Duration) (net.Conn, error) {
-	return net.DialTimeout("tcp", string(address), timeout)
+	if s.clientTLS == nil {
+		return net.DialTimeout("tcp", string(address), timeout)
+	}
+	dialer := &tls.Dialer{
+		NetDialer: &net.Dialer{Timeout: timeout},
+		Config:    s.clientTLS,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return dialer.DialContext(ctx, "tcp", string(address))
 }
 
 func (s *tcpStreamLayer) Accept() (net.Conn, error) { return s.listener.Accept() }
@@ -202,10 +218,21 @@ func Open(cfg Config) (*Store, error) {
 	store.forwardCreds = forwardCreds
 	store.forwardAuthToken = firstNonEmpty(cfg.ForwardAuthToken, os.Getenv(ForwardAuthTokenEnv))
 
+	raftServerTLS, raftClientTLS, err := peerTLSConfigs(cfg.RaftTLS)
+	if err != nil {
+		localStore.Close()
+		return nil, err
+	}
+
 	listener, err := net.Listen("tcp", strings.TrimSpace(cfg.RaftAddress))
 	if err != nil {
 		localStore.Close()
 		return nil, fmt.Errorf("raftstore: listen on %s: %w", cfg.RaftAddress, err)
+	}
+	if raftServerTLS != nil {
+		// Handshakes are completed lazily by hashicorp/raft when it reads the
+		// connection, so a plaintext peer is rejected there.
+		listener = tls.NewListener(listener, raftServerTLS)
 	}
 
 	// Prefer the operator-configured advertised address. If none is set, use
@@ -235,6 +262,7 @@ func Open(cfg Config) (*Store, error) {
 	stream := &tcpStreamLayer{
 		listener:  listener,
 		advertise: staticAddr{value: localRaftAddress},
+		clientTLS: raftClientTLS,
 	}
 	transport := raft.NewNetworkTransport(stream, 3, cfg.TransportTimeout, cfg.LogOutput)
 	store.transport = transport
@@ -301,6 +329,37 @@ func Open(cfg Config) (*Store, error) {
 	}
 
 	return store, nil
+}
+
+// peerTLSConfigs builds the raft peer transport TLS configurations. A nil
+// override reads the shared STRATA_TLS_* environment; Mode=off returns nil
+// configurations so the peer transport stays in plaintext.
+func peerTLSConfigs(override *tlsx.EnvConfig) (*tls.Config, *tls.Config, error) {
+	var cfg tlsx.EnvConfig
+	if override != nil {
+		cfg = *override
+		if cfg.Mode == "" {
+			cfg.Mode = tlsx.ModeOff
+		}
+	} else {
+		loaded, err := tlsx.LoadEnv()
+		if err != nil {
+			return nil, nil, err
+		}
+		cfg = loaded
+	}
+	if cfg.Mode == tlsx.ModeOff {
+		return nil, nil, nil
+	}
+	server, err := tlsx.NewServerTLSConfig(cfg.ServerConfig())
+	if err != nil {
+		return nil, nil, fmt.Errorf("raftstore: raft peer TLS server: %w", err)
+	}
+	client, err := tlsx.NewClientTLSConfig(cfg.ClientConfig())
+	if err != nil {
+		return nil, nil, fmt.Errorf("raftstore: raft peer TLS client: %w", err)
+	}
+	return server, client, nil
 }
 
 func (s *Store) registerRaftEndpoint(addr raft.ServerAddress, nodeID, api string) {
