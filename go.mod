@@ -7,7 +7,6 @@ require (
 	github.com/hashicorp/raft v1.7.3
 	github.com/hashicorp/raft-boltdb/v2 v2.3.1
 	github.com/prometheus/client_golang v1.15.0
-	github.com/radryc/tlsx v0.0.0-00010101000000-000000000000
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.11
 )
@@ -43,6 +42,7 @@ require (
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.42.0 // indirect
 	github.com/prometheus/procfs v0.9.0 // indirect
+	github.com/radryc/tlsx v0.0.0-20261119062528-06e96b34334f
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	go.etcd.io/bbolt v1.3.5 // indirect
 	golang.org/x/exp v0.0.0-20230626212559-97b1e661b5df // indirect
@@ -51,5 +51,3 @@ require (
 	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
 )
-
-replace github.com/radryc/tlsx => ../tlsx
