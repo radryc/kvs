@@ -42,18 +42,19 @@ type auditRecord struct {
 type auditor struct {
 	logger *slog.Logger
 	closer io.Closer
+	chain  *auditChain
 }
 
 func newAuditor(cfg Config) (*auditor, error) {
 	if cfg.AuditLogger != nil {
-		return &auditor{logger: cfg.AuditLogger}, nil
+		return &auditor{logger: cfg.AuditLogger, chain: newAuditChainFromEnv("")}, nil
 	}
 	path := strings.TrimSpace(cfg.AuditLogPath)
 	if path == "" {
 		path = strings.TrimSpace(os.Getenv(AuditLogEnv))
 	}
 	if path == "" {
-		return &auditor{logger: slog.New(slog.NewJSONHandler(os.Stderr, nil))}, nil
+		return &auditor{logger: slog.New(slog.NewJSONHandler(os.Stderr, nil)), chain: newAuditChainFromEnv("")}, nil
 	}
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
@@ -62,6 +63,7 @@ func newAuditor(cfg Config) (*auditor, error) {
 	return &auditor{
 		logger: slog.New(slog.NewJSONHandler(file, nil)),
 		closer: file,
+		chain:  newAuditChainFromEnv(path),
 	}, nil
 }
 
@@ -91,6 +93,9 @@ func (a *auditor) record(ctx context.Context, action, logicalPath, method string
 		Code:        code,
 		Method:      method,
 		DurationMS:  time.Since(started).Milliseconds(),
+	}
+	if a.chain != nil {
+		a.chain.emit(ctx, record.Principal, record.Action, record.LogicalPath, record.Method, record.Decision, record.Code, started)
 	}
 	a.logger.LogAttrs(ctx, slog.LevelInfo, "kvs.audit",
 		slog.String("ts", record.Timestamp),
