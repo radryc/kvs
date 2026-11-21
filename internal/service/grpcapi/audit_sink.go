@@ -97,6 +97,7 @@ type auditChain struct {
 	prevHash  string
 	sink      *chAuditSink
 	dropped   uint64
+	broken    bool
 }
 
 func newAuditChainFromEnv(logPath string) *auditChain {
@@ -140,6 +141,9 @@ func (c *auditChain) emit(ctx context.Context, principal, action, logicalPath, m
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.broken {
+		return
+	}
 
 	event := map[string]any{
 		"timestamp":      started.UTC().Format(time.RFC3339Nano),
@@ -181,6 +185,9 @@ func (c *auditChain) emit(ctx context.Context, principal, action, logicalPath, m
 		time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond)
 	}
 	if !ok {
+		// The event may or may not have committed. Stop this writer's chain
+		// instead of reusing the sequence for a different event.
+		c.broken = true
 		c.dropped++
 		return
 	}
