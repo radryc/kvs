@@ -13,6 +13,14 @@ go build ./...
 go test ./...
 ```
 
-The store is consumed as a library (`pkg/raftstore`, `internal/service/grpcapi`) and as an embedded local store (`internal/store/local`).
+The store is consumed as a library (`pkg/raftstore`, `pkg/grpcserver`, `pkg/kvsapi`) and as an embedded local store (`pkg/localstore`). `internal/store/local` and `internal/service/grpcapi` contain the implementations behind those public packages.
+
+## Authentication scope
+
+`grpcserver.NewWithAuth` (backed by `grpcapi.NewServerWithAuth`) requires a
+bearer token from `Config.AuthToken` or `KVS_AUTH_TOKEN` on `KVStore` RPCs
+(health checks excepted). The interceptors can be installed on a gRPC server
+that also hosts other services: non-`KVStore` methods are left to their own
+authentication rather than being rejected or bypassed by the KVS token.
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).

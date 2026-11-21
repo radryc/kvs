@@ -65,10 +65,11 @@ func NewServer(store kvsapi.Store, cfg Config) *Server {
 	return server
 }
 
-// NewServerWithAuth builds a server that requires a bearer token on every RPC
-// (health checks excepted). The token is taken from Config.AuthToken, falling
-// back to KVS_AUTH_TOKEN. Callers must attach UnaryInterceptor and
-// StreamInterceptor to their gRPC server.
+// NewServerWithAuth builds a server that requires a bearer token on every
+// KVStore RPC (health checks and RPCs of other services hosted on the same gRPC
+// server are excepted). The token is taken from Config.AuthToken, falling back
+// to KVS_AUTH_TOKEN. Callers must attach UnaryInterceptor and StreamInterceptor
+// to their gRPC server.
 func NewServerWithAuth(store kvsapi.Store, cfg Config) (*Server, error) {
 	token := strings.TrimSpace(cfg.AuthToken)
 	if token == "" {
@@ -162,7 +163,7 @@ func StreamAuthInterceptor(authToken string) grpc.StreamServerInterceptor {
 }
 
 func authenticate(ctx context.Context, fullMethod, expected string) (string, error) {
-	if expected == "" || isHealthMethod(fullMethod) {
+	if expected == "" || isHealthMethod(fullMethod) || !isKVMethod(fullMethod) {
 		return PrincipalFromContext(ctx), nil
 	}
 	md, ok := metadata.FromIncomingContext(ctx)
@@ -192,6 +193,14 @@ func constantTimeTokenEqual(got, expected string) bool {
 
 func isHealthMethod(fullMethod string) bool {
 	return strings.HasPrefix(fullMethod, "/grpc.health.v1.Health/")
+}
+
+// isKVMethod reports whether the RPC belongs to the KVStore service. The
+// interceptors are installed on the host gRPC server, which may also serve
+// other APIs (for example MonoFS). Their own authentication must not be
+// bypassed or pre-empted by the KVS bearer token.
+func isKVMethod(fullMethod string) bool {
+	return strings.HasPrefix(fullMethod, "/kvs.v1.KVStore/")
 }
 
 type authenticatedStream struct {

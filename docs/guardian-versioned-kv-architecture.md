@@ -104,7 +104,7 @@ Guardian writes configuration, intent manifests, task state, and archive metadat
 For that reason:
 
 - each shard has a leader
-- writes are accepted by the leader only
+- writes are committed by the leader only
 - metadata commits are replicated through Raft
 - reads can be linearizable or lease-based
 
@@ -193,7 +193,7 @@ VersionManifest {
   content_sha256      string
   size_bytes          int64
   blob_ref            string
-  storage_class       hot | archive
+  storage_class       hot | archive | offloaded
   committed_at        timestamp
   tombstone           bool
   principal_id        string
@@ -263,6 +263,10 @@ Even though 1 MB is not enormous, streaming avoids repeated full-buffer copies a
 
 This keeps large payload bytes out of the replicated consensus log while still making the metadata commit strongly ordered.
 
+The current single-group store buffers a `PutFileStream` upload in memory and
+commits the blob together with its Raft metadata entry; the staging-WAL and
+follower-staging steps above describe the scale-out write path.
+
 ### Guardian batch write
 
 Guardian needs batch revision IDs and compare-and-swap semantics.
@@ -293,17 +297,18 @@ This is necessary for:
 
 1. If the local node is the Raft leader, the read is served from the local store.
 2. If it is a follower, the request is forwarded to the current leader over the
-   gRPC API. Forwarded `NotFound` results are normalized so a follower does not
-   report a transient miss.
+   gRPC API. Forwarded `NotFound` results are normalized to `os.ErrNotExist`,
+   matching the local store contract instead of surfacing a gRPC status.
 3. Metadata lookup returns the latest version manifest.
 4. If `storage_class=hot`, the blob is read from local segments.
-5. If `storage_class=archive`, the blob is read from local archive storage or,
-   when a fetcher offloader is configured, fetched from the MonoFS fetcher tier.
+5. If `storage_class=archive`, the blob is read from local archive storage.
+6. If `storage_class=offloaded`, the blob is fetched from the MonoFS fetcher
+   tier through the configured offloader.
 
 Writes follow the same rule: any node accepts the request, but only the leader
-commits it to the Raft log. Startup advertises a stable service name and
-resolves peers at dial time, so a node does not need DNS for its peers before it
-can start.
+commits it to the Raft log. Startup advertises the configured Raft address
+(which may be a stable service name) and resolves peers at dial time, so a node
+does not need DNS for its peers before it can start.
 
 ### Historical read
 
@@ -562,10 +567,10 @@ target design work.
 | Optimistic concurrency (`ExpectedVersionID`) and batch revisions | Implemented | `pkg/raftstore`, `pkg/kvsapi` |
 | Prefix listing and directory semantics | Implemented | `internal/store/local/store.go` |
 | Prefix watch subscriptions | Implemented | `Store.Watch` in both tiers |
-| Hot/archive tiering and purge | Implemented | `MaxHotVersions`, `MaxArchivedVersions`, `Offloader` |
+| Hot/archive tiering and purge | Implemented | `pkg/localstore` / `internal/store/local` (`MaxHotVersions`, `MaxArchivedVersions`, `Offloader`) |
 | Offload archived blobs to MonoFS fetcher | Implemented (optional) | `kvsapi.FetcherOffloader` |
 | Snapshots and restore | Implemented | `Store.Snapshot`, `Store.Restore` |
-| gRPC API and streaming reads/writes | Implemented | `api/proto/kvs/v1`, `internal/service/grpcapi` |
+| gRPC API and streaming reads/writes | Implemented | `api/proto/kvs/v1`, `pkg/grpcserver`, `internal/service/grpcapi` |
 | Leader forwarding for writes and reads | Implemented | `mutateWithLeader`, `leaderClient` |
 | Prometheus metrics | Implemented | `internal/store/local/metrics.go`, `pkg/raftstore/metrics.go` |
 | Virtual shards, placement, rebalancing | Not implemented | target design |

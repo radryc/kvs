@@ -131,6 +131,13 @@ func TestUnaryAuthInterceptor(t *testing.T) {
 		t.Fatalf("health check without token: %v", err)
 	}
 
+	// Other services hosted on the same gRPC server keep their own auth and
+	// must not be rejected by the KVS token.
+	otherInfo := &grpc.UnaryServerInfo{FullMethod: "/monofs.MonoFS/GetNodeInfo"}
+	if _, err := interceptor(context.Background(), nil, otherInfo, handler); err != nil {
+		t.Fatalf("non-KVS method without token: %v", err)
+	}
+
 	// An empty configured token keeps the historical unauthenticated behaviour.
 	open := UnaryAuthInterceptor("")
 	if got, err := open(context.Background(), nil, info, handler); err != nil || got != anonymousPrincipal {

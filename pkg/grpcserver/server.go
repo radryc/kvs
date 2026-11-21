@@ -38,8 +38,8 @@ func New(store kvsapi.Store, cfg Config) kvsv1.KVStoreServer {
 }
 
 // NewWithAuth returns a KVStore service that requires a bearer token on every
-// RPC (health checks excepted), together with the gRPC server options that
-// enforce it:
+// KVStore RPC (health checks and RPCs of other services on the same gRPC server
+// are excepted), together with the gRPC server options that enforce it:
 //
 //	service, opts, err := grpcserver.NewWithAuth(store, cfg)
 //	srv := grpc.NewServer(opts...)
