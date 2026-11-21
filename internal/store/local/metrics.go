@@ -75,4 +75,20 @@ var (
 		Name:      "read_bytes_total",
 		Help:      "Total bytes read from KVS blob storage (ReadFile content only).",
 	})
+
+	// kvsReadDurationSeconds is the end-to-end latency of local KVS reads.
+	kvsReadDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "kvs",
+		Name:      "read_duration_seconds",
+		Help:      "Latency of local KVS read operations, by op (read_file, list_dir, stat).",
+		Buckets:   []float64{0.00005, 0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5},
+	}, []string{"op"})
+
+	// kvsWriteDurationSeconds is the end-to-end latency of local KVS mutations.
+	kvsWriteDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "kvs",
+		Name:      "write_duration_seconds",
+		Help:      "Latency of local KVS write operations, by op (upsert, delete).",
+		Buckets:   []float64{0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
+	}, []string{"op"})
 )

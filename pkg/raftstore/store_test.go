@@ -50,6 +50,7 @@ func TestReplicatedStoreForwardsToLeaderAndReplicates(t *testing.T) {
 			Bootstrap:      index == 0,
 			MaxHotVersions: 2,
 			LogOutput:      io.Discard,
+			ForwardTLS:     ForwardTLSConfig{AllowPlaintext: true},
 		}
 		store, err := Open(cfg)
 		if err != nil {

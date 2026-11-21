@@ -1,6 +1,8 @@
 package grpcserver
 
 import (
+	"log/slog"
+
 	kvsv1 "github.com/radryc/kvs/api/proto/kvs/v1"
 	grpcapi "github.com/radryc/kvs/internal/service/grpcapi"
 	"github.com/radryc/kvs/pkg/kvsapi"
@@ -9,12 +11,82 @@ import (
 
 type Config struct {
 	ChunkSize int
+	// AuthToken is the bearer token required by NewWithAuth. When empty,
+	// NewWithAuth falls back to KVS_AUTH_TOKEN.
+	AuthToken string
+	// AuditLogPath enables a JSONL audit trail. When empty, KVS_AUDIT_LOG is
+	// consulted, otherwise audit records are written to stderr as JSON.
+	AuditLogPath string
+	// AuditLogger overrides the audit destination (tests and embedding).
+	AuditLogger *slog.Logger
 }
 
+func apiConfig(cfg Config) grpcapi.Config {
+	return grpcapi.Config{
+		ChunkSize:    cfg.ChunkSize,
+		AuthToken:    cfg.AuthToken,
+		AuditLogPath: cfg.AuditLogPath,
+		AuditLogger:  cfg.AuditLogger,
+	}
+}
+
+// New returns an unauthenticated server for tests and callers that provide
+// their own authorization layer. Production entry points should use
+// NewWithAuth.
 func New(store kvsapi.Store, cfg Config) kvsv1.KVStoreServer {
-	return grpcapi.NewServer(store, grpcapi.Config{ChunkSize: cfg.ChunkSize})
+	return grpcapi.NewServer(store, apiConfig(cfg))
 }
 
+// NewWithAuth returns a KVStore service that requires a bearer token on every
+// KVStore RPC (health checks and RPCs of other services on the same gRPC server
+// are excepted), together with the gRPC server options that enforce it:
+//
+//	service, opts, err := grpcserver.NewWithAuth(store, cfg)
+//	srv := grpc.NewServer(opts...)
+//	kvsv1.RegisterKVStoreServer(srv, service)
+func NewWithAuth(store kvsapi.Store, cfg Config) (kvsv1.KVStoreServer, []grpc.ServerOption, error) {
+	server, err := grpcapi.NewServerWithAuth(store, apiConfig(cfg))
+	if err != nil {
+		return nil, nil, err
+	}
+	options := []grpc.ServerOption{
+		grpc.ChainUnaryInterceptor(server.UnaryInterceptor()),
+		grpc.ChainStreamInterceptor(server.StreamInterceptor()),
+	}
+	return server, options, nil
+}
+
+// TLSOptions returns the gRPC server options that serve TLS or mTLS from the
+// shared STRATA_TLS_* contract. It returns no options when STRATA_TLS_MODE is
+// off, so plaintext remains the default.
+//
+//	opts, err := grpcserver.TLSOptions()
+//	srv := grpc.NewServer(append(authOpts, opts...)...)
+func TLSOptions() ([]grpc.ServerOption, error) {
+	return grpcapi.TLSOptions()
+}
+
+// NewWithAuthAndTLS returns a KVStore service protected by the bearer-token
+// interceptors and the gRPC server options that enforce them, plus TLS/mTLS
+// transport options derived from STRATA_TLS_* (none when the mode is off):
+//
+//	service, opts, err := grpcserver.NewWithAuthAndTLS(store, cfg)
+//	srv := grpc.NewServer(opts...)
+//	kvsv1.RegisterKVStoreServer(srv, service)
+func NewWithAuthAndTLS(store kvsapi.Store, cfg Config) (kvsv1.KVStoreServer, []grpc.ServerOption, error) {
+	server, options, err := NewWithAuth(store, cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	tlsOptions, err := grpcapi.TLSOptions()
+	if err != nil {
+		return nil, nil, err
+	}
+	return server, append(options, tlsOptions...), nil
+}
+
+// Register installs an unauthenticated KVStore service. Use NewWithAuth and a
+// grpc.NewServer configured with its options when authentication is required.
 func Register(server grpc.ServiceRegistrar, store kvsapi.Store, cfg Config) {
 	if server == nil || store == nil {
 		return

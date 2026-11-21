@@ -56,12 +56,13 @@ type Store struct {
 	watcherQueueSize    int
 	offloader           kvsapi.FetcherOffloader
 
-	writeMu   sync.Mutex
-	watchMu   sync.Mutex
-	watchers  map[uint64]*watchSubscription
-	nextWatch uint64
-	closed    bool
-	keyCount  atomic.Int64
+	writeMu       sync.Mutex
+	watchMu       sync.Mutex
+	watchers      map[uint64]*watchSubscription
+	nextWatch     uint64
+	closed        bool
+	keyCount      atomic.Int64
+	dirIndexReady atomic.Bool
 }
 
 type watchSubscription struct {
@@ -120,6 +121,10 @@ func Open(cfg Config) (*Store, error) {
 	}
 	store.keyCount.Store(keyCount)
 	kvsActiveKeysGauge.Add(float64(keyCount))
+	if err := store.ensureDirIndex(); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("local: build directory index: %w", err)
+	}
 
 	return store, nil
 }
@@ -315,6 +320,8 @@ func (s *Store) Restore(r io.Reader) error {
 }
 
 func (s *Store) ReadFile(ctx context.Context, logicalPath string) ([]byte, error) {
+	start := time.Now()
+	defer func() { kvsReadDurationSeconds.WithLabelValues("read_file").Observe(time.Since(start).Seconds()) }()
 	_ = ctx
 	normalized, err := normalizePath(logicalPath)
 	if err != nil {
@@ -337,65 +344,19 @@ func (s *Store) ReadFile(ctx context.Context, logicalPath string) ([]byte, error
 }
 
 func (s *Store) ListDir(ctx context.Context, logicalDir string) ([]kvsapi.DirEntry, error) {
+	start := time.Now()
+	defer func() { kvsReadDurationSeconds.WithLabelValues("list_dir").Observe(time.Since(start).Seconds()) }()
 	_ = ctx
 	normalizedDir, err := normalizePath(logicalDir)
 	if err != nil {
 		return nil, err
 	}
-
-	children := make(map[string]kvsapi.DirEntry)
-	iter, err := s.db.NewIter(&pebble.IterOptions{
-		LowerBound: latestPrefix(),
-		UpperBound: prefixUpperBound(latestPrefix()),
-	})
-	if err != nil {
-		return nil, err
-	}
-	defer iter.Close()
-
-	for iter.First(); iter.Valid(); iter.Next() {
-		manifest, err := decodeManifest(iter.Value())
-		if err != nil {
-			return nil, err
-		}
-		if manifest.Version.Tombstone {
-			continue
-		}
-		name, isDir, ok := childOf(normalizedDir, manifest.Version.LogicalPath)
-		if !ok {
-			continue
-		}
-		entry, exists := children[name]
-		if !exists {
-			entry = kvsapi.DirEntry{Name: name}
-		}
-		if isDir {
-			entry.IsDir = true
-			entry.Size = 0
-		} else if !entry.IsDir {
-			entry.Size = manifest.SizeBytes
-		}
-		children[name] = entry
-	}
-	if err := iter.Error(); err != nil {
-		return nil, err
-	}
-
-	entries := make([]kvsapi.DirEntry, 0, len(children))
-	for _, entry := range children {
-		entries = append(entries, entry)
-	}
-	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].IsDir != entries[j].IsDir {
-			return entries[i].IsDir
-		}
-		return entries[i].Name < entries[j].Name
-	})
-	kvsReadOpsTotal.WithLabelValues("list_dir").Inc()
-	return entries, nil
+	return s.listDirFromIndex(normalizedDir)
 }
 
 func (s *Store) Stat(ctx context.Context, logicalPath string) (kvsapi.FileInfo, error) {
+	start := time.Now()
+	defer func() { kvsReadDurationSeconds.WithLabelValues("stat").Observe(time.Since(start).Seconds()) }()
 	_ = ctx
 	normalized, err := normalizePath(logicalPath)
 	if err != nil {
@@ -454,6 +415,8 @@ func (s *Store) Watch(ctx context.Context, prefixes []string) (<-chan kvsapi.Cha
 }
 
 func (s *Store) UpsertFiles(ctx context.Context, batch kvsapi.MutationBatch) (kvsapi.BatchRevision, error) {
+	start := time.Now()
+	defer func() { kvsWriteDurationSeconds.WithLabelValues("upsert").Observe(time.Since(start).Seconds()) }()
 	_ = ctx
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
@@ -482,6 +445,7 @@ func (s *Store) UpsertFiles(ctx context.Context, batch kvsapi.MutationBatch) (kv
 			s.cleanupFiles(prepared.createdFiles)
 			return kvsapi.BatchRevision{}, err
 		}
+		addDirIndexEntries(pbBatch, manifest.Version.LogicalPath, false, manifest.SizeBytes)
 	}
 	if err := pbBatch.Commit(pebble.Sync); err != nil {
 		s.cleanupFiles(prepared.createdFiles)
@@ -502,6 +466,8 @@ func (s *Store) UpsertFiles(ctx context.Context, batch kvsapi.MutationBatch) (kv
 }
 
 func (s *Store) DeletePaths(ctx context.Context, batch kvsapi.DeleteBatch) (kvsapi.BatchRevision, error) {
+	start := time.Now()
+	defer func() { kvsWriteDurationSeconds.WithLabelValues("delete").Observe(time.Since(start).Seconds()) }()
 	_ = ctx
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
@@ -556,6 +522,7 @@ func (s *Store) DeletePaths(ctx context.Context, batch kvsapi.DeleteBatch) (kvsa
 		if err := pbBatch.Set(latestKey(normalized), encoded, nil); err != nil {
 			return kvsapi.BatchRevision{}, err
 		}
+		deleteDirIndexEntry(pbBatch, normalized)
 		result.Files = append(result.Files, manifest.Version)
 		events = append(events, kvsapi.ChangeEvent{
 			LogicalPath:     normalized,

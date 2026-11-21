@@ -3,39 +3,217 @@ package grpcapi
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"errors"
 	"io"
 	"io/fs"
+	"log/slog"
+	"os"
 	"strings"
+	"time"
 
 	kvsv1 "github.com/radryc/kvs/api/proto/kvs/v1"
 	"github.com/radryc/kvs/pkg/kvsapi"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const defaultChunkSize = 64 * 1024
 
+// AuthTokenEnv is the environment variable consulted by NewServerWithAuth when
+// Config.AuthToken is empty.
+const AuthTokenEnv = "KVS_AUTH_TOKEN"
+
+// ErrAuthTokenRequired is returned when the authenticated constructor is used
+// without a bearer token configured.
+var ErrAuthTokenRequired = errors.New("grpcapi: auth token is required (set Config.AuthToken or KVS_AUTH_TOKEN)")
+
 type Config struct {
 	ChunkSize int
+	// AuthToken is the bearer token required on every RPC. NewServerWithAuth
+	// falls back to KVS_AUTH_TOKEN when this is empty.
+	AuthToken string
+	// AuditLogPath enables a JSONL audit trail at the given path. When empty,
+	// KVS_AUDIT_LOG is consulted; otherwise audit records go to stderr as
+	// structured JSON.
+	AuditLogPath string
+	// AuditLogger overrides the audit destination. It takes precedence over
+	// AuditLogPath and is primarily useful for tests and embedding.
+	AuditLogger *slog.Logger
 }
 
 type Server struct {
 	kvsv1.UnimplementedKVStoreServer
 	store     kvsapi.Store
 	chunkSize int
+	authToken string
+	auditor   *auditor
 }
 
+// NewServer builds an unauthenticated server. It is intended for tests and
+// embedded callers that provide their own authorization layer. Production
+// entry points should use NewServerWithAuth.
 func NewServer(store kvsapi.Store, cfg Config) *Server {
+	server, err := newServer(store, cfg)
+	if err != nil {
+		panic("grpcapi: NewServer: " + err.Error())
+	}
+	return server
+}
+
+// NewServerWithAuth builds a server that requires a bearer token on every
+// KVStore RPC (health checks and RPCs of other services hosted on the same gRPC
+// server are excepted). The token is taken from Config.AuthToken, falling back
+// to KVS_AUTH_TOKEN. Callers must attach UnaryInterceptor and StreamInterceptor
+// to their gRPC server.
+func NewServerWithAuth(store kvsapi.Store, cfg Config) (*Server, error) {
+	token := strings.TrimSpace(cfg.AuthToken)
+	if token == "" {
+		token = strings.TrimSpace(os.Getenv(AuthTokenEnv))
+	}
+	if token == "" {
+		return nil, ErrAuthTokenRequired
+	}
+	cfg.AuthToken = token
+	server, err := newServer(store, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return server, nil
+}
+
+func newServer(store kvsapi.Store, cfg Config) (*Server, error) {
 	if cfg.ChunkSize <= 0 {
 		cfg.ChunkSize = defaultChunkSize
 	}
-	return &Server{store: store, chunkSize: cfg.ChunkSize}
+	audit, err := newAuditor(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &Server{
+		store:     store,
+		chunkSize: cfg.ChunkSize,
+		authToken: strings.TrimSpace(cfg.AuthToken),
+		auditor:   audit,
+	}, nil
 }
 
-func (s *Server) ReadFile(ctx context.Context, req *kvsv1.ReadFileRequest) (*kvsv1.ReadFileResponse, error) {
+// Close releases resources owned by the server, such as an audit log file.
+func (s *Server) Close() error {
+	if s == nil || s.auditor == nil {
+		return nil
+	}
+	return s.auditor.Close()
+}
+
+// UnaryInterceptor returns the bearer-token interceptor for s. It is a no-op
+// when no token is configured (for example, a server created with NewServer).
+// Authentication failures are also written to the audit trail.
+func (s *Server) UnaryInterceptor() grpc.UnaryServerInterceptor {
+	auth := UnaryAuthInterceptor(s.authToken)
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		resp, err := auth(ctx, req, info, handler)
+		if status.Code(err) == codes.Unauthenticated {
+			path := requestLogicalPath(req)
+			s.auditor.record(ctx, actionForMethod(info.FullMethod), path, info.FullMethod, time.Now(), err)
+		}
+		return resp, err
+	}
+}
+
+// StreamInterceptor returns the streaming bearer-token interceptor for s.
+func (s *Server) StreamInterceptor() grpc.StreamServerInterceptor {
+	auth := StreamAuthInterceptor(s.authToken)
+	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		err := auth(srv, stream, info, handler)
+		if status.Code(err) == codes.Unauthenticated {
+			s.auditor.record(stream.Context(), actionForMethod(info.FullMethod), "", info.FullMethod, time.Now(), err)
+		}
+		return err
+	}
+}
+
+// UnaryAuthInterceptor enforces bearer-token authentication using a
+// constant-time comparison. An empty token disables enforcement.
+func UnaryAuthInterceptor(authToken string) grpc.UnaryServerInterceptor {
+	expected := strings.TrimSpace(authToken)
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		principal, err := authenticate(ctx, info.FullMethod, expected)
+		if err != nil {
+			return nil, err
+		}
+		return handler(withPrincipal(ctx, principal), req)
+	}
+}
+
+// StreamAuthInterceptor is the streaming equivalent of UnaryAuthInterceptor.
+func StreamAuthInterceptor(authToken string) grpc.StreamServerInterceptor {
+	expected := strings.TrimSpace(authToken)
+	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		principal, err := authenticate(stream.Context(), info.FullMethod, expected)
+		if err != nil {
+			return err
+		}
+		return handler(srv, &authenticatedStream{ServerStream: stream, ctx: withPrincipal(stream.Context(), principal)})
+	}
+}
+
+func authenticate(ctx context.Context, fullMethod, expected string) (string, error) {
+	if expected == "" || isHealthMethod(fullMethod) || !isKVMethod(fullMethod) {
+		return PrincipalFromContext(ctx), nil
+	}
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return "", status.Error(codes.Unauthenticated, "missing bearer token")
+	}
+	for _, value := range md.Get("authorization") {
+		scheme, token, found := strings.Cut(strings.TrimSpace(value), " ")
+		if !found || !strings.EqualFold(scheme, "Bearer") {
+			continue
+		}
+		if constantTimeTokenEqual(strings.TrimSpace(token), expected) {
+			return principalForToken(expected), nil
+		}
+	}
+	return "", status.Error(codes.Unauthenticated, "invalid or missing bearer token")
+}
+
+// constantTimeTokenEqual compares tokens by comparing fixed-size digests, so
+// neither the contents nor the length of the configured token leak through
+// timing.
+func constantTimeTokenEqual(got, expected string) bool {
+	gotDigest := sha256.Sum256([]byte(got))
+	expectedDigest := sha256.Sum256([]byte(expected))
+	return subtle.ConstantTimeCompare(gotDigest[:], expectedDigest[:]) == 1
+}
+
+func isHealthMethod(fullMethod string) bool {
+	return strings.HasPrefix(fullMethod, "/grpc.health.v1.Health/")
+}
+
+// isKVMethod reports whether the RPC belongs to the KVStore service. The
+// interceptors are installed on the host gRPC server, which may also serve
+// other APIs (for example MonoFS). Their own authentication must not be
+// bypassed or pre-empted by the KVS bearer token.
+func isKVMethod(fullMethod string) bool {
+	return strings.HasPrefix(fullMethod, "/kvs.v1.KVStore/")
+}
+
+type authenticatedStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (s *authenticatedStream) Context() context.Context { return s.ctx }
+
+func (s *Server) ReadFile(ctx context.Context, req *kvsv1.ReadFileRequest) (resp *kvsv1.ReadFileResponse, err error) {
 	logicalPath := strings.TrimSpace(req.GetLogicalPath())
+	done := s.auditCall(ctx, actionRead, "ReadFile", &logicalPath)
+	defer func() { done(err) }()
 	if logicalPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "logical_path is required")
 	}
@@ -57,8 +235,10 @@ func (s *Server) ReadFile(ctx context.Context, req *kvsv1.ReadFileRequest) (*kvs
 	}, nil
 }
 
-func (s *Server) ReadFileStream(req *kvsv1.ReadFileRequest, stream kvsv1.KVStore_ReadFileStreamServer) error {
+func (s *Server) ReadFileStream(req *kvsv1.ReadFileRequest, stream kvsv1.KVStore_ReadFileStreamServer) (err error) {
 	logicalPath := strings.TrimSpace(req.GetLogicalPath())
+	done := s.auditCall(stream.Context(), actionRead, "ReadFileStream", &logicalPath)
+	defer func() { done(err) }()
 	if logicalPath == "" {
 		return status.Error(codes.InvalidArgument, "logical_path is required")
 	}
@@ -76,8 +256,10 @@ func (s *Server) ReadFileStream(req *kvsv1.ReadFileRequest, stream kvsv1.KVStore
 	return s.sendFileStream(stream, versions[0], content)
 }
 
-func (s *Server) Stat(ctx context.Context, req *kvsv1.StatRequest) (*kvsv1.StatResponse, error) {
+func (s *Server) Stat(ctx context.Context, req *kvsv1.StatRequest) (resp *kvsv1.StatResponse, err error) {
 	logicalPath := strings.TrimSpace(req.GetLogicalPath())
+	done := s.auditCall(ctx, actionRead, "Stat", &logicalPath)
+	defer func() { done(err) }()
 	if logicalPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "logical_path is required")
 	}
@@ -88,8 +270,10 @@ func (s *Server) Stat(ctx context.Context, req *kvsv1.StatRequest) (*kvsv1.StatR
 	return &kvsv1.StatResponse{Info: protoFileInfo(info)}, nil
 }
 
-func (s *Server) ListDir(ctx context.Context, req *kvsv1.ListDirRequest) (*kvsv1.ListDirResponse, error) {
+func (s *Server) ListDir(ctx context.Context, req *kvsv1.ListDirRequest) (resp *kvsv1.ListDirResponse, err error) {
 	logicalDir := strings.TrimSpace(req.GetLogicalDir())
+	done := s.auditCall(ctx, actionRead, "ListDir", &logicalDir)
+	defer func() { done(err) }()
 	if logicalDir == "" {
 		return nil, status.Error(codes.InvalidArgument, "logical_dir is required")
 	}
@@ -104,7 +288,10 @@ func (s *Server) ListDir(ctx context.Context, req *kvsv1.ListDirRequest) (*kvsv1
 	return response, nil
 }
 
-func (s *Server) UpsertFiles(ctx context.Context, req *kvsv1.UpsertFilesRequest) (*kvsv1.BatchRevision, error) {
+func (s *Server) UpsertFiles(ctx context.Context, req *kvsv1.UpsertFilesRequest) (resp *kvsv1.BatchRevision, err error) {
+	paths := auditPaths(req.GetWrites())
+	done := s.auditCall(ctx, actionWrite, "UpsertFiles", &paths)
+	defer func() { done(err) }()
 	batch, err := s.store.UpsertFiles(ctx, kvsapi.MutationBatch{
 		Writes:  apiWrites(req.GetWrites()),
 		Context: apiMutationContext(req.GetContext()),
@@ -115,7 +302,10 @@ func (s *Server) UpsertFiles(ctx context.Context, req *kvsv1.UpsertFilesRequest)
 	return protoBatchRevision(batch), nil
 }
 
-func (s *Server) DeletePaths(ctx context.Context, req *kvsv1.DeletePathsRequest) (*kvsv1.BatchRevision, error) {
+func (s *Server) DeletePaths(ctx context.Context, req *kvsv1.DeletePathsRequest) (resp *kvsv1.BatchRevision, err error) {
+	paths := auditDeletePaths(req.GetDeletes())
+	done := s.auditCall(ctx, actionDelete, "DeletePaths", &paths)
+	defer func() { done(err) }()
 	batch, err := s.store.DeletePaths(ctx, kvsapi.DeleteBatch{
 		Deletes: apiDeletes(req.GetDeletes()),
 		Context: apiMutationContext(req.GetContext()),
@@ -126,8 +316,10 @@ func (s *Server) DeletePaths(ctx context.Context, req *kvsv1.DeletePathsRequest)
 	return protoBatchRevision(batch), nil
 }
 
-func (s *Server) ListVersions(ctx context.Context, req *kvsv1.ListVersionsRequest) (*kvsv1.ListVersionsResponse, error) {
+func (s *Server) ListVersions(ctx context.Context, req *kvsv1.ListVersionsRequest) (resp *kvsv1.ListVersionsResponse, err error) {
 	logicalPath := strings.TrimSpace(req.GetLogicalPath())
+	done := s.auditCall(ctx, actionVersion, "ListVersions", &logicalPath)
+	defer func() { done(err) }()
 	if logicalPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "logical_path is required")
 	}
@@ -142,8 +334,10 @@ func (s *Server) ListVersions(ctx context.Context, req *kvsv1.ListVersionsReques
 	return response, nil
 }
 
-func (s *Server) GetVersion(ctx context.Context, req *kvsv1.GetVersionRequest) (*kvsv1.GetVersionResponse, error) {
+func (s *Server) GetVersion(ctx context.Context, req *kvsv1.GetVersionRequest) (resp *kvsv1.GetVersionResponse, err error) {
 	logicalPath := strings.TrimSpace(req.GetLogicalPath())
+	done := s.auditCall(ctx, actionVersion, "GetVersion", &logicalPath)
+	defer func() { done(err) }()
 	versionID := strings.TrimSpace(req.GetVersionId())
 	if logicalPath == "" || versionID == "" {
 		return nil, status.Error(codes.InvalidArgument, "logical_path and version_id are required")
@@ -155,8 +349,10 @@ func (s *Server) GetVersion(ctx context.Context, req *kvsv1.GetVersionRequest) (
 	return &kvsv1.GetVersionResponse{File: protoVersionedFile(file)}, nil
 }
 
-func (s *Server) GetVersionStream(req *kvsv1.GetVersionRequest, stream kvsv1.KVStore_GetVersionStreamServer) error {
+func (s *Server) GetVersionStream(req *kvsv1.GetVersionRequest, stream kvsv1.KVStore_GetVersionStreamServer) (err error) {
 	logicalPath := strings.TrimSpace(req.GetLogicalPath())
+	done := s.auditCall(stream.Context(), actionVersion, "GetVersionStream", &logicalPath)
+	defer func() { done(err) }()
 	versionID := strings.TrimSpace(req.GetVersionId())
 	if logicalPath == "" || versionID == "" {
 		return status.Error(codes.InvalidArgument, "logical_path and version_id are required")
@@ -168,9 +364,13 @@ func (s *Server) GetVersionStream(req *kvsv1.GetVersionRequest, stream kvsv1.KVS
 	return s.sendFileStream(stream, file.Version, file.Content)
 }
 
-func (s *Server) PutFileStream(stream kvsv1.KVStore_PutFileStreamServer) error {
+func (s *Server) PutFileStream(stream kvsv1.KVStore_PutFileStreamServer) (err error) {
 	var meta *kvsv1.PutFileMeta
 	var content bytes.Buffer
+	var logicalPath string
+
+	done := s.auditCall(stream.Context(), actionWrite, "PutFileStream", &logicalPath)
+	defer func() { done(err) }()
 
 	for {
 		msg, err := stream.Recv()
@@ -189,6 +389,7 @@ func (s *Server) PutFileStream(stream kvsv1.KVStore_PutFileStreamServer) error {
 				return status.Error(codes.InvalidArgument, "meta.logical_path is required")
 			}
 			meta = payload.Meta
+			logicalPath = strings.TrimSpace(payload.Meta.GetLogicalPath())
 		case *kvsv1.PutFileStreamRequest_Chunk:
 			if meta == nil {
 				return status.Error(codes.InvalidArgument, "meta must be sent before chunks")
@@ -225,7 +426,10 @@ func (s *Server) PutFileStream(stream kvsv1.KVStore_PutFileStreamServer) error {
 	})
 }
 
-func (s *Server) Watch(req *kvsv1.WatchRequest, stream kvsv1.KVStore_WatchServer) error {
+func (s *Server) Watch(req *kvsv1.WatchRequest, stream kvsv1.KVStore_WatchServer) (err error) {
+	prefixes := strings.Join(req.GetPrefixes(), ",")
+	done := s.auditCall(stream.Context(), actionWatch, "Watch", &prefixes)
+	defer func() { done(err) }()
 	changes, err := s.store.Watch(stream.Context(), req.GetPrefixes())
 	if err != nil {
 		return toStatus(err)

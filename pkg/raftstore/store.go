@@ -2,6 +2,8 @@ package raftstore
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,8 +21,10 @@ import (
 	kvsv1 "github.com/radryc/kvs/api/proto/kvs/v1"
 	"github.com/radryc/kvs/internal/store/local"
 	"github.com/radryc/kvs/pkg/kvsapi"
+	"github.com/radryc/tlsx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
@@ -51,20 +55,58 @@ type Config struct {
 	TransportTimeout time.Duration
 	LogOutput        io.Writer
 	Offloader        kvsapi.FetcherOffloader // optional; routes archived blobs to fetcher
+	ForwardTLS       ForwardTLSConfig
+	// RaftTLS overrides the STRATA_TLS_* environment for the raft peer
+	// transport. When nil (the recommended setting) the environment is read at
+	// Open time. Mode=off keeps the peer transport in plaintext.
+	RaftTLS *tlsx.EnvConfig
+	// ForwardAuthToken is the bearer token sent to the Raft leader on
+	// forwarded RPCs. When empty, KVS_FORWARD_AUTH_TOKEN is consulted.
+	ForwardAuthToken string
 }
 
+// ForwardTLSConfig configures TLS for the gRPC client used to forward
+// requests to the Raft leader. TLS is enabled by default and verifies the
+// leader certificate against system roots; plaintext requires an explicit
+// opt-in.
+type ForwardTLSConfig struct {
+	// AllowPlaintext explicitly permits unencrypted forwarded gRPC.
+	AllowPlaintext bool
+	// CAFile optionally replaces the system trust store.
+	CAFile string
+	// ServerName optionally overrides the TLS server name used for
+	// verification.
+	ServerName string
+	// InsecureSkipVerify disables certificate verification. Development only.
+	InsecureSkipVerify bool
+}
+
+// ForwardAuthTokenEnv is the environment variable consulted when
+// Config.ForwardAuthToken is empty.
+const ForwardAuthTokenEnv = "KVS_FORWARD_AUTH_TOKEN"
+
+// Forward TLS environment variables.
+const (
+	forwardTLSAllowPlaintextEnv = "KVS_FORWARD_TLS_ALLOW_PLAINTEXT"
+	forwardTLSCAFileEnv         = "KVS_FORWARD_TLS_CA_FILE"
+	forwardTLSServerNameEnv     = "KVS_FORWARD_TLS_SERVER_NAME"
+	forwardTLSInsecureEnv       = "KVS_FORWARD_TLS_INSECURE_SKIP_VERIFY"
+)
+
 type Store struct {
-	local        *local.Store
-	raft         *raft.Raft
-	transport    *raft.NetworkTransport
-	applyTimeout time.Duration
-	dialTimeout  time.Duration
-	apiByRaft    map[raft.ServerAddress]string
-	nodeByRaft   map[raft.ServerAddress]string
-	apiByNode    map[string]string
-	connsMu      sync.Mutex
-	connections  map[string]*grpc.ClientConn
-	clients      map[string]kvsv1.KVStoreClient
+	local            *local.Store
+	raft             *raft.Raft
+	transport        *raft.NetworkTransport
+	applyTimeout     time.Duration
+	dialTimeout      time.Duration
+	apiByRaft        map[raft.ServerAddress]string
+	nodeByRaft       map[raft.ServerAddress]string
+	apiByNode        map[string]string
+	connsMu          sync.Mutex
+	connections      map[string]*grpc.ClientConn
+	clients          map[string]kvsv1.KVStoreClient
+	forwardCreds     credentials.TransportCredentials
+	forwardAuthToken string
 }
 
 type commandEnvelope struct {
@@ -92,10 +134,21 @@ func (a staticAddr) String() string  { return a.value }
 type tcpStreamLayer struct {
 	listener  net.Listener
 	advertise net.Addr
+	// clientTLS dials peers over TLS when non-nil.
+	clientTLS *tls.Config
 }
 
 func (s *tcpStreamLayer) Dial(address raft.ServerAddress, timeout time.Duration) (net.Conn, error) {
-	return net.DialTimeout("tcp", string(address), timeout)
+	if s.clientTLS == nil {
+		return net.DialTimeout("tcp", string(address), timeout)
+	}
+	dialer := &tls.Dialer{
+		NetDialer: &net.Dialer{Timeout: timeout},
+		Config:    s.clientTLS,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return dialer.DialContext(ctx, "tcp", string(address))
 }
 
 func (s *tcpStreamLayer) Accept() (net.Conn, error) { return s.listener.Accept() }
@@ -157,10 +210,29 @@ func Open(cfg Config) (*Store, error) {
 		return nil, fmt.Errorf("raftstore: node id is required when raft is enabled")
 	}
 
+	forwardCreds, err := buildForwardCredentials(cfg.ForwardTLS)
+	if err != nil {
+		localStore.Close()
+		return nil, err
+	}
+	store.forwardCreds = forwardCreds
+	store.forwardAuthToken = firstNonEmpty(cfg.ForwardAuthToken, os.Getenv(ForwardAuthTokenEnv))
+
+	raftServerTLS, raftClientTLS, err := peerTLSConfigs(cfg.RaftTLS)
+	if err != nil {
+		localStore.Close()
+		return nil, err
+	}
+
 	listener, err := net.Listen("tcp", strings.TrimSpace(cfg.RaftAddress))
 	if err != nil {
 		localStore.Close()
 		return nil, fmt.Errorf("raftstore: listen on %s: %w", cfg.RaftAddress, err)
+	}
+	if raftServerTLS != nil {
+		// Handshakes are completed lazily by hashicorp/raft when it reads the
+		// connection, so a plaintext peer is rejected there.
+		listener = tls.NewListener(listener, raftServerTLS)
 	}
 
 	// Prefer the operator-configured advertised address. If none is set, use
@@ -190,6 +262,7 @@ func Open(cfg Config) (*Store, error) {
 	stream := &tcpStreamLayer{
 		listener:  listener,
 		advertise: staticAddr{value: localRaftAddress},
+		clientTLS: raftClientTLS,
 	}
 	transport := raft.NewNetworkTransport(stream, 3, cfg.TransportTimeout, cfg.LogOutput)
 	store.transport = transport
@@ -256,6 +329,37 @@ func Open(cfg Config) (*Store, error) {
 	}
 
 	return store, nil
+}
+
+// peerTLSConfigs builds the raft peer transport TLS configurations. A nil
+// override reads the shared STRATA_TLS_* environment; Mode=off returns nil
+// configurations so the peer transport stays in plaintext.
+func peerTLSConfigs(override *tlsx.EnvConfig) (*tls.Config, *tls.Config, error) {
+	var cfg tlsx.EnvConfig
+	if override != nil {
+		cfg = *override
+		if cfg.Mode == "" {
+			cfg.Mode = tlsx.ModeOff
+		}
+	} else {
+		loaded, err := tlsx.LoadEnv()
+		if err != nil {
+			return nil, nil, err
+		}
+		cfg = loaded
+	}
+	if cfg.Mode == tlsx.ModeOff {
+		return nil, nil, nil
+	}
+	server, err := tlsx.NewServerTLSConfig(cfg.ServerConfig())
+	if err != nil {
+		return nil, nil, fmt.Errorf("raftstore: raft peer TLS server: %w", err)
+	}
+	client, err := tlsx.NewClientTLSConfig(cfg.ClientConfig())
+	if err != nil {
+		return nil, nil, fmt.Errorf("raftstore: raft peer TLS client: %w", err)
+	}
+	return server, client, nil
 }
 
 func (s *Store) registerRaftEndpoint(addr raft.ServerAddress, nodeID, api string) {
@@ -732,7 +836,20 @@ func (s *Store) clientFor(endpoint string) (kvsv1.KVStoreClient, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), s.dialTimeout)
 	defer cancel()
-	conn, err := grpc.DialContext(ctx, endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+
+	opts := []grpc.DialOption{grpc.WithBlock()}
+	if s.forwardCreds != nil {
+		opts = append(opts, grpc.WithTransportCredentials(s.forwardCreds))
+	} else {
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	}
+	if s.forwardAuthToken != "" {
+		opts = append(opts, grpc.WithPerRPCCredentials(forwardBearer{
+			token:      s.forwardAuthToken,
+			requireTLS: s.forwardCreds != nil,
+		}))
+	}
+	conn, err := grpc.DialContext(ctx, endpoint, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -740,6 +857,91 @@ func (s *Store) clientFor(endpoint string) (kvsv1.KVStoreClient, error) {
 	client := kvsv1.NewKVStoreClient(conn)
 	s.clients[endpoint] = client
 	return client, nil
+}
+
+// buildForwardCredentials returns TLS credentials for the forwarded gRPC
+// client, or nil when plaintext was explicitly allowed. Plaintext is denied
+// by default.
+//
+// STRATA_TLS_* takes precedence over KVS_FORWARD_TLS_*: when the shared mode is
+// optional or required, the shared client configuration is used (with
+// certificate verification always enabled) and the legacy plaintext opt-in is
+// ignored.
+func buildForwardCredentials(cfg ForwardTLSConfig) (credentials.TransportCredentials, error) {
+	envCfg, err := tlsx.LoadEnv()
+	if err != nil {
+		return nil, err
+	}
+	if envCfg.Mode != tlsx.ModeOff {
+		creds, err := tlsx.ClientCredentials(envCfg.ClientConfig())
+		if err != nil {
+			return nil, fmt.Errorf("raftstore: strata tls forward client: %w", err)
+		}
+		return creds, nil
+	}
+	if plaintextForwardAllowed(cfg) {
+		return nil, nil
+	}
+	tlsConfig, err := forwardClientTLSConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return credentials.NewTLS(tlsConfig), nil
+}
+
+func plaintextForwardAllowed(cfg ForwardTLSConfig) bool {
+	return cfg.AllowPlaintext || boolEnv(forwardTLSAllowPlaintextEnv)
+}
+
+func forwardClientTLSConfig(cfg ForwardTLSConfig) (*tls.Config, error) {
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		ServerName: firstNonEmpty(cfg.ServerName, os.Getenv(forwardTLSServerNameEnv)),
+	}
+	if cfg.InsecureSkipVerify || boolEnv(forwardTLSInsecureEnv) {
+		tlsConfig.InsecureSkipVerify = true
+	}
+	caFile := firstNonEmpty(cfg.CAFile, os.Getenv(forwardTLSCAFileEnv))
+	if caFile != "" {
+		pemBytes, err := os.ReadFile(caFile)
+		if err != nil {
+			return nil, fmt.Errorf("raftstore: read forward TLS CA file %s: %w", caFile, err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(pemBytes) {
+			return nil, fmt.Errorf("raftstore: forward TLS CA file %s contains no usable certificates", caFile)
+		}
+		tlsConfig.RootCAs = pool
+	}
+	return tlsConfig, nil
+}
+
+// forwardBearer attaches the internal bearer token to forwarded RPCs. Tokens
+// are only sent when the transport is TLS, unless the operator explicitly
+// allowed plaintext forwarding.
+type forwardBearer struct {
+	token      string
+	requireTLS bool
+}
+
+func (b forwardBearer) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
+	return map[string]string{"authorization": "Bearer " + b.token}, nil
+}
+
+func (b forwardBearer) RequireTransportSecurity() bool { return b.requireTLS }
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func boolEnv(key string) bool {
+	value, err := strconv.ParseBool(strings.TrimSpace(os.Getenv(key)))
+	return err == nil && value
 }
 
 type fsm struct {
