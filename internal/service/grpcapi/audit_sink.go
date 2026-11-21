@@ -84,6 +84,7 @@ func (s *chAuditSink) write(ctx context.Context, event map[string]any) error {
 }
 
 type auditChainState struct {
+	WriterID string `json:"writerId"`
 	Seq      uint64 `json:"seq"`
 	PrevHash string `json:"prevHash"`
 }
@@ -120,7 +121,7 @@ func newAuditChainFromEnv(logPath string) *auditChain {
 	if statePath != "" {
 		if raw, err := os.ReadFile(filepath.Clean(statePath)); err == nil {
 			var state auditChainState
-			if json.Unmarshal(raw, &state) == nil {
+			if json.Unmarshal(raw, &state) == nil && state.WriterID == c.writerID {
 				c.seq = state.Seq
 				if strings.TrimSpace(state.PrevHash) != "" {
 					c.prevHash = state.PrevHash
@@ -176,7 +177,7 @@ func (c *auditChain) emit(ctx context.Context, principal, action, logicalPath, m
 	c.seq++
 	c.prevHash = hash
 	if c.statePath != "" {
-		state, _ := json.Marshal(auditChainState{Seq: c.seq, PrevHash: c.prevHash})
+		state, _ := json.Marshal(auditChainState{WriterID: c.writerID, Seq: c.seq, PrevHash: c.prevHash})
 		_ = os.WriteFile(filepath.Clean(c.statePath), state, 0o600)
 	}
 }
