@@ -170,7 +170,17 @@ func (c *auditChain) emit(ctx context.Context, principal, action, logicalPath, m
 	hash := hex.EncodeToString(sum[:])
 	event["hash"] = hash
 	event["raw_json"] = string(canonical)
-	if err := c.sink.write(ctx, event); err != nil {
+	// Retry the same event/seq so an ambiguous ClickHouse success cannot make
+	// the next event reuse the sequence with a different hash.
+	ok := false
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := c.sink.write(ctx, event); err == nil {
+			ok = true
+			break
+		}
+		time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond)
+	}
+	if !ok {
 		c.dropped++
 		return
 	}
