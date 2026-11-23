@@ -10,7 +10,10 @@ watching, snapshots, and leader forwarding over a gRPC `KVStore` API. The
 distributed sharding, placement, and repair sections describe the target design
 for scale-out and are not all implemented yet. The
 [implementation status](#implementation-status) table at the end of this
-document is authoritative for what ships today.
+document is authoritative for what ships today. Unless that table marks a
+capability implemented, the detailed mechanics below (per-key-class retention,
+archive naming, staging WAL/hinted handoff, object-store archives, sharding,
+and the Guardian adapter) describe target design.
 
 This document describes a distributed key-value store that can back Guardian partitions and intents while also handling a much larger generic object workload than the current MonoFS-facing path model.
 
@@ -242,8 +245,10 @@ These map directly to the current Guardian store contract:
 Use gRPC with streaming for values above a small threshold.
 
 - unary calls are acceptable for small metadata objects
-- streamed upload/download should be the default path for values above `256 KB`
-- server and client message limits should still be raised to at least `16 MB` for convenience and compatibility
+- explicit streaming upload/download RPCs exist; the chunk size defaults to
+  64 KiB
+- server/client message limits of `16 MB` and a `256 KB` pushdown threshold are
+  target guidance, not currently enforced defaults
 
 Even though 1 MB is not enormous, streaming avoids repeated full-buffer copies and gives headroom for larger objects later.
 
@@ -334,11 +339,14 @@ The store does not overwrite in place. The latest pointer changes, but previous 
 
 ### Retention policy
 
-Per namespace or per key-class policy:
+Target: per namespace or per key-class policy:
 
 - `max_hot_versions`: default `5`
 - `archive_older_than_count`: default `> max_hot_versions`
 - optional age-based rules for aggressive archival
+
+Current implementation exposes a single global `MaxHotVersions` (default `5`)
+plus `MaxArchivedVersions`; per-key-class policy is not implemented.
 
 For Guardian, a useful initial policy is:
 
@@ -376,6 +384,10 @@ For a key with more than `max_hot_versions`:
 5. Drop the hot blob reference.
 6. Mark the blob segment space reclaimable after a grace period.
 
+Current local archives are stored as `{archiveDir}/{versionID}.blob`; the
+`(namespace, logical_key, version_id)` naming and an object-store backend are
+target design.
+
 ### Important rule
 
 Archive is not delete.
@@ -401,6 +413,10 @@ Good candidates:
 The archive backend is optimized for durability and retrieval, not for low-latency hot reads.
 
 ## Persistence And Recovery
+
+> **Status:** Raft WAL/snapshots, Pebble metadata, and immutable blobs are
+> implemented. Upload staging WALs, hinted handoff, and anti-entropy repair are
+> target design (see the implementation table).
 
 Each replica persists these components locally:
 
@@ -433,6 +449,10 @@ When a node returns after an outage:
 This preserves the useful `ssdc` idea of background repair, but under correct shard ownership and ordered metadata commits.
 
 ## Guardian Integration
+
+> **Target design:** there is no `guardianapi.Store` adapter in this repository.
+> Guardian currently reads KVS-backed state through MonoFS; this section
+> describes the proposed direct adapter.
 
 ### Logical mapping
 
@@ -513,6 +533,12 @@ At minimum:
 - authorization by namespace and partition prefix
 - immutable audit metadata on every batch mutation
 
+**Implemented today:** TLS/mTLS via the shared `STRATA_TLS_*` contract
+(`grpcapi.NewWithAuthAndTLS`, `TLSOptions`), bearer-token authentication
+(`KVS_AUTH_TOKEN`), a separate forwarding token (`KVS_FORWARD_AUTH_TOKEN`), and
+an append-only JSONL audit log (`KVS_AUDIT_LOG`). **Not implemented:**
+namespace/partition authorization and immutable per-batch audit metadata.
+
 The mutation context should carry:
 
 - principal ID
@@ -572,6 +598,8 @@ target design work.
 | Snapshots and restore | Implemented | `Store.Snapshot`, `Store.Restore` |
 | gRPC API and streaming reads/writes | Implemented | `api/proto/kvs/v1`, `pkg/grpcserver`, `internal/service/grpcapi` |
 | Leader forwarding for writes and reads | Implemented | `mutateWithLeader`, `leaderClient` |
+| TLS/mTLS, bearer auth, forwarding token | Implemented | `internal/service/grpcapi/tls.go`, `pkg/grpcserver`, `KVS_FORWARD_AUTH_TOKEN` |
+| Append-only JSONL audit log | Implemented | `internal/service/grpcapi/audit.go`, `KVS_AUDIT_LOG` |
 | Prometheus metrics | Implemented | `internal/store/local/metrics.go`, `pkg/raftstore/metrics.go` |
 | Virtual shards, placement, rebalancing | Not implemented | target design |
 | Object-store archive backend (S3/MinIO) | Not implemented; local archive plus optional fetcher offload | target design |
